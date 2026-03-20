@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>RaketOwl Filing Cabinet</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Orbitron Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap" rel="stylesheet">
+
+    <style>
+        /* Theme Styles */
+        body.light-mode {
+            background-color: #f8f9fa;
+            color: #000;
+        }
+
+        body.dark-mode {
+            background-color: #121212;
+            color: #fff;
+        }
+
+        /* Header */
+        .main-title {
+            font-family: 'Orbitron', san-serif;
+            font-size: 72px;
+            color: #00f5d4; /* Teal */
+            text-align: center;
+            margin-top: 20px;
+	    text-shadow: 0 0 8px #00fdd4;
+        }
+
+        /* Buttons */
+        .btn-custom {
+            margin: 5px;
+        }
+
+	/* TABLE - DARK MODE ENHANCED */
+	.table-dark-custom {
+    	    background-color: #181818; /* darker body */
+    	    color: #ffffff;
+	}
+
+	.table-dark-custom tbody tr {
+    	    background-color: #1e1e1e;
+    	    color: #ffffff;
+	}
+
+	.table-dark-custom tbody tr:hover {
+    	    background-color: #2a2a2a;
+	}
+
+	/* FORCE dark mode table rows colors */
+	body.dark-mode .table-dark-custom tbody tr {
+    	    background-color: #1e1e1e !important;
+    	    color: #ffffff !important;
+	}
+
+	body.dark-mode .table-dark-custom tbody tr:hover {
+    	    background-color: #2a2a2a !important;
+    	    color: #ffffff !important;
+	}
+
+	/* FORCE DARK MODE TABLE BODY */
+	body.dark-mode .table-dark-custom tbody tr,
+	body.dark-mode .table-dark-custom tbody tr td {
+    	    background-color: #1e1e1e !important; /* row + cells */
+    	    color: #ffffff !important;
+	}
+
+	body.dark-mode .table-dark-custom tbody tr:hover,
+	body.dark-mode .table-dark-custom tbody tr:hover td {
+    	    background-color: #2a2a2a !important;
+    	    color: #ffffff !important;
+	}
+
+	/* HEADER - DEEP BLACK + NEON */
+	.table-dark-custom thead {
+    	    background-color: #000000;
+	}
+
+	.table-dark-custom th {
+    	    color: #ff2bd6; /* Neon Pink */
+    	    background-color: #000000;
+	}
+
+        /* Center utilities */
+        .center {
+            text-align: center;
+        }
+
+	/* Welcome User Styling */
+	.welcome-user {
+    	    font-weight: bold;
+    	    font-size: 24px; /* Adjust size as needed */
+    	    color: #FFC107; /* Amber */
+    	    text-shadow: 0 0 8px #FFB300; /* Amber Glow */
+    	    margin-right: 15px; /* spacing from Logout button */
+	}
+
+	/* FILE INPUT - DARK MODE */
+	body.dark-mode input[type="file"] {
+    	    background-color: #1e1e1e;
+    	    color: #ffffff;
+    	border: 1px solid #444;
+	}
+
+	body.dark-mode input[type="file"]::file-selector-button {
+    	    background-color: #333;
+    	    color: #fff;
+    	    border: none;
+    	    padding: 6px 10px;
+    	    margin-right: 10px;
+    	    cursor: pointer;
+	}
+
+	body.dark-mode input[type="file"]::file-selector-button:hover {
+    	    background-color: #555;
+	}
+
+	/* SEARCH INPUT - DARK MODE */
+	body.dark-mode input[type="text"] {
+    	    background-color: #1e1e1e;
+    	    color: #ffffff;
+    	    border: 1px solid #444;
+	}
+
+	body.dark-mode input[type="text"]::placeholder {
+    	    color: #aaaaaa;
+	}
+
+	/* ROUNDED TABLE */
+	.table-dark-custom {
+	    border-radius: 9px;
+	    overflow: hidden; /* REQUIRED for rounded corners */
+	}
+
+	/* LOGIN MODAL - DARK MODE FIX */
+	body.dark-mode .modal-content {
+    	    background-color: #1e1e1e;
+    	    color: #ffffff;
+    	    border: 1px solid #444;
+	}
+
+	body.dark-mode .modal-header,
+	body.dark-mode .modal-footer {
+    	   border-color: #444;
+	}
+
+	body.dark-mode .modal-title {
+    	    color: #00f5d4; /* match your neon theme */
+	}
+
+	/* Inputs inside modal */
+	body.dark-mode .modal-content input {
+    	    background-color: #121212;
+    	    color: #ffffff;
+    	    border: 1px solid #444;
+	}
+
+	body.dark-mode .modal-content input::placeholder {
+    	    color: #aaaaaa;
+	}
+
+	/* Close button (X) */
+	body.dark-mode .btn-close {
+    	    filter: invert(1);
+	}
+
+	/* FIX BROWSER AUTOFILL (DARK MODE) */
+	body.dark-mode input:-webkit-autofill,
+	body.dark-mode input:-webkit-autofill:hover,
+	body.dark-mode input:-webkit-autofill:focus,
+	body.dark-mode input:-webkit-autofill:active {
+    	    -webkit-box-shadow: 0 0 0 1000px #121212 inset !important;
+    	    -webkit-text-fill-color: #ffffff !important;
+    	    caret-color: #ffffff !important;
+    	    border: 1px solid #444 !important;
+	}
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <!-- HEADER -->
+    <h1 class="main-title">Raket Owl Filing Cabinet</h1>
+    	{% if error == 'invalid' %}
+    	<div class="alert alert-danger text-center mt-3">
+    	    Invalid username or password
+    	</div>
+    	{% endif %}
+
+    <!-- TOP CONTROLS -->
+	<div class="d-flex justify-content-center align-items-center mt-3 flex-wrap">
+
+    	    <!-- Login Button -->
+    	    {% if not session.get('user_id') %}
+        	<button class="btn btn-primary btn-custom" data-bs-toggle="modal" data-bs-target="#loginModal">
+            	    Login
+        	</button>
+    	    {% else %}
+        	<span class="welcome-user">Welcome, {{ session['username'] }}</span>
+        	<a href="/logout" class="btn btn-danger btn-custom">Logout</a>
+    	    {% endif %}
+
+    	    <!-- Theme Toggle -->
+    	    <button class="btn btn-secondary btn-custom" onclick="toggleTheme()">
+        	<span id="themeIcon">🌙</span>
+    	    </button>
+
+    	    <!-- Upload Form (NOW MOVED HERE) -->
+	    {% if session.get('user_id') %}
+
+	    <form action="/upload" method="POST" enctype="multipart/form-data" class="d-flex align-items-center ms-3">
+
+    		<input type="file" name="document" class="form-control me-2" required style="max-width: 250px;">
+
+    		<!-- PUBLIC TOGGLE -->
+    		<div class="form-check form-switch text-nowrap me-2">
+        	    <input class="form-check-input" type="checkbox" name="is_public" id="publicToggle">
+        	    <label class="form-check-label" for="publicToggle">Public</label>
+    		</div>
+
+    		<button type="submit" class="btn btn-success">Upload</button>
+
+	    </form>
+
+	    {% endif %}
+	</div>	
+
+    <!-- SEARCH BAR -->
+    <div class="mt-4">
+    	<form method="GET" action="/" class="mt-4">
+    	    <input 
+        	type="text" 
+        	name="search"
+        	class="form-control" 
+        	placeholder="Search documents..."
+        	value="{{ request.args.get('search', '') }}"
+    	    >
+	</form>
+    </div>
+
+    <!-- PUBLIC DOCUMENTS TABLE -->
+    <div class="mt-4">
+        <table class="table table-dark-custom table-hover">
+            <thead>
+                <tr>
+                    <th>File Name</th>
+                    <th>Owner</th>
+                    <th>Version</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+	    <tbody>
+    		{% if documents %}
+        	    {% for doc in documents %}
+        	    <tr>
+            		<td>{{ doc.filename }}</td>
+            		<td>{{ doc.username }}</td>
+            		<td>{{ doc.version }}</td>
+
+			<td>
+    			    {% if doc.is_public %}
+        		    	<span class="badge bg-success">Public</span>
+    			    {% else %}
+        			<span class="badge bg-secondary">Private</span>
+    			    {% endif %}
+			</td>
+
+			<td>
+
+    			    <!-- DOWNLOAD -->
+    			    <a href="/download/{{ doc.id }}" class="btn btn-sm btn-primary">
+        			Download
+    			    </a>
+
+    			    {% if session.get('user_id') == doc.owner_id %}
+
+        			<!-- TOGGLE PUBLIC / PRIVATE -->
+        			<form action="/toggle_visibility/{{ doc.id }}" method="POST" style="display:inline;">
+            			    {% if doc.is_public %}
+                			<button type="submit" class="btn btn-sm btn-warning">
+                    			    Make Private
+                			</button>
+            			    {% else %}
+                			<button type="submit" class="btn btn-sm btn-success">
+                    			    Make Public
+                			</button>
+            			    {% endif %}
+        			</form>
+
+        			<!-- DELETE -->
+        			<form action="/delete/{{ doc.id }}" method="POST" style="display:inline;">
+            			    <button type="submit" class="btn btn-sm btn-danger"
+                    			    onclick="return confirm('Delete this file?');">
+                			Delete
+            			    </button>
+        			</form>
+
+    			    {% endif %}
+
+			</td>
+        	    </tr>
+        	    {% endfor %}
+    		{% else %}
+        	    <tr>
+            		<td colspan="4" class="center">No documents available</td>
+        	    </tr>
+    		{% endif %}
+	    </tbody>
+        </table>
+    </div>
+
+</div>
+
+<!-- LOGIN MODAL -->
+<div class="modal fade" id="loginModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+
+            <form method="POST" action="/login">
+                <div class="modal-header">
+                    <h5 class="modal-title">Login</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body">
+                    <input type="text" name="username" class="form-control mb-2" placeholder="Username" required>
+                    <input type="password" name="password" class="form-control" placeholder="Password" required>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Login</button>
+                </div>
+            </form>
+
+        </div>
+    </div>
+</div>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- Theme Script -->
+<script>
+    function toggleTheme() {
+    	let body = document.body;
+    	let icon = document.getElementById("themeIcon");
+
+    	if (body.classList.contains("dark-mode")) {
+            body.classList.remove("dark-mode");
+            body.classList.add("light-mode");
+            localStorage.setItem("theme", "light");
+            icon.textContent = "☀️";
+    	} else {
+            body.classList.remove("light-mode");
+            body.classList.add("dark-mode");
+            localStorage.setItem("theme", "dark");
+            icon.textContent = "🌙";
+    	}	
+    }
+
+    // Load saved theme
+    	window.onload = function () {
+            let theme = localStorage.getItem("theme");
+            let icon = document.getElementById("themeIcon");
+
+    	document.body.classList.remove("dark-mode", "light-mode");
+
+    	if (theme === "light") {
+            document.body.classList.add("light-mode");
+            if (icon) icon.textContent = "☀️";
+    	} else {
+            document.body.classList.add("dark-mode");
+            if (icon) icon.textContent = "🌙";
+    	}
+    };
+</script>
+
+</body>
+</html>
