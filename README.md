@@ -24,5 +24,5 @@ A Dockerized document management system built with:
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/raketqueen/raketowl
+git clone https://github.com/raketqueen/raketowl.git
 cd ~/raketowl
