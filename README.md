@@ -1,4 +1,4 @@
-# 📂 RaketOwl Filing Cabinet
+# 📂 RaketOwl Filing Cabinet (Under Development)
 
 A Dockerized document management system built with:
 
@@ -33,12 +33,12 @@ cd ~/raketowl
 ```bash
 docker compose up --build -d
 ```
-
-### 3. Initial Admin Account
+### 3. Post Docker Compose build:
+- Web app will be accessible at http://localhost:8080
 - Username: admin
 - Password: admin123 (hashed in init.sql)
 
-### 4. Stopping containers
+### 5. Stopping containers
 
 ```bash
 docker compose down
