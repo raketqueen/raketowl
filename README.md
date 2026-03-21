@@ -38,7 +38,7 @@ docker compose up --build -d
 - Username: admin
 - Password: admin123 (hashed in init.sql)
 
-### 5. Stopping containers
+### 4. Stopping containers
 
 ```bash
 docker compose down
