@@ -45,19 +45,50 @@ def index():
 
         if search:
             cursor.execute(
-                """SELECT documents.id, documents.filename, documents.version, documents.owner_id, documents.is_public, users.username 
-                   FROM documents
-                   JOIN users ON documents.owner_id = users.id
-                   WHERE documents.owner_id = %s AND documents.filename LIKE %s""",
-                (session['user_id'], f"%{search}%")
+                """
+                SELECT DISTINCT
+                    documents.id,
+                    documents.filename,
+                    documents.version,
+                    documents.owner_id,
+                    documents.is_public,
+                    users.username,
+                    document_shares.permission
+                FROM documents
+                JOIN users ON documents.owner_id = users.id
+                LEFT JOIN document_shares
+                    ON documents.id = document_shares.document_id
+                WHERE
+                    (
+                        documents.owner_id = %s
+                        OR documents.is_public = 1
+                        OR document_shares.shared_with_user_id = %s
+                    )
+                    AND documents.filename LIKE %s
+                """,
+                (session['user_id'], session['user_id'], f"%{search}%")
             )
         else:
             cursor.execute(
-                """SELECT documents.id, documents.filename, documents.version, documents.owner_id, documents.is_public, users.username 
-                   FROM documents
-                   JOIN users ON documents.owner_id = users.id
-                   WHERE documents.owner_id = %s""",
-                (session['user_id'],)
+                """
+                SELECT DISTINCT
+                    documents.id,
+                    documents.filename,
+                    documents.version,
+                    documents.owner_id,
+                    documents.is_public,
+                    users.username,
+                    document_shares.permission
+                FROM documents
+                JOIN users ON documents.owner_id = users.id
+                LEFT JOIN document_shares
+                    ON documents.id = document_shares.document_id
+                WHERE
+                    documents.owner_id = %s
+                    OR documents.is_public = 1
+                    OR document_shares.shared_with_user_id = %s
+                """,
+                (session['user_id'], session['user_id'])
             )
 
     else:
@@ -214,7 +245,27 @@ def download(doc_id):
 
     # Access control
     if not doc['is_public']:
-        if 'user_id' not in session or session['user_id'] != doc['owner_id']:
+
+        if 'user_id' not in session:
+            return "Unauthorized", 403
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Check if shared
+        cursor.execute(
+            """
+            SELECT permission FROM document_shares
+            WHERE document_id = %s AND shared_with_user_id = %s
+            """,
+            (doc_id, session['user_id'])
+        )
+        shared = cursor.fetchone()
+
+        cursor.close()
+        conn.close()
+
+        if session['user_id'] != doc['owner_id'] and not shared:
             return "Unauthorized", 403
 
     return send_file(doc['filepath'], as_attachment=True)
@@ -322,6 +373,206 @@ def toggle_visibility(doc_id):
     conn.close()
 
     return redirect(url_for('index'))
+
+# =========================
+# ADMIN - VIEW USERS
+# =========================
+
+
+@app.route('/admin/users')
+def admin_users():
+
+    # Only admin allowed
+    if 'user_id' not in session or session.get('role') != 'admin':
+        return "Unauthorized", 403
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    # Get users
+    cursor.execute("SELECT id, username, role, created_at FROM users")
+    users = cursor.fetchall()
+
+    # Get groups
+    cursor.execute("SELECT id, name, description FROM groups_master")
+    groups = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    return render_template('admin_users.html', users=users, groups=groups)
+
+# =========================
+# ADMIN - CREATE GROUP
+# =========================
+
+
+@app.route('/admin/create_group', methods=['POST'])
+def create_group():
+
+    # Admin only
+    if 'user_id' not in session or session.get('role') != 'admin':
+        return "Unauthorized", 403
+
+    group_name = request.form.get('group_name')
+    description = request.form.get('description')
+
+    if not group_name:
+        return redirect(url_for('admin_users'))
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(
+            "INSERT INTO groups_master (name, description) VALUES (%s, %s)",
+            (group_name, description)
+        )
+        conn.commit()
+
+        # Log activity
+        cursor.execute(
+            "INSERT INTO activity_logs (username, action, details) VALUES (%s, %s, %s)",
+            (session['username'], 'CREATE_GROUP',
+             f"Created group: {group_name}")
+        )
+        conn.commit()
+
+    except Exception as e:
+        print("Error creating group:", e)
+
+    cursor.close()
+    conn.close()
+
+    return redirect(url_for('admin_users'))
+
+# =========================
+# ADMIN - EDIT GROUP
+# =========================
+
+
+@app.route('/admin/edit_group/<int:group_id>', methods=['POST'])
+def edit_group(group_id):
+
+    if 'user_id' not in session or session.get('role') != 'admin':
+        return "Unauthorized", 403
+
+    group_name = request.form.get('group_name')
+    description = request.form.get('description')
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Get old group name
+    cursor.execute("SELECT name FROM groups_master WHERE id = %s", (group_id,))
+    old_name = cursor.fetchone()[0]
+
+    # Update group
+    cursor.execute(
+        "UPDATE groups_master SET name = %s, description = %s WHERE id = %s",
+        (group_name, description, group_id)
+    )
+
+    # Log activity with name
+    cursor.execute(
+        "INSERT INTO activity_logs (username, action, details) VALUES (%s, %s, %s)",
+        (
+            session['username'],
+            'EDIT_GROUP',
+            f"Edited group: {old_name} → {group_name}"
+        )
+    )
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return redirect(url_for('admin_users'))
+
+# =========================
+# ADMIN - DELETE GROUP (STRICT)
+# =========================
+
+
+@app.route('/admin/delete_group/<int:group_id>', methods=['POST'])
+def delete_group(group_id):
+
+    if 'user_id' not in session or session.get('role') != 'admin':
+        return "Unauthorized", 403
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # 🔍 CHECK if group is used
+    cursor.execute(
+        "SELECT COUNT(*) FROM user_groups WHERE group_id = %s",
+        (group_id,)
+    )
+    count = cursor.fetchone()[0]
+
+    if count > 0:
+        cursor.close()
+        conn.close()
+        return "Cannot delete group: group is assigned to users", 400
+
+    # Get group name BEFORE delete
+    cursor.execute("SELECT name FROM groups_master WHERE id = %s", (group_id,))
+    group = cursor.fetchone()
+
+    group_name = group[0] if group else "Unknown"
+
+    # Delete group
+    cursor.execute(
+        "DELETE FROM groups_master WHERE id = %s",
+        (group_id,)
+    )
+
+    # Log activity with name
+    cursor.execute(
+        "INSERT INTO activity_logs (username, action, details) VALUES (%s, %s, %s)",
+        (
+            session['username'],
+            'DELETE_GROUP',
+            f"Deleted group: {group_name}"
+        )
+    )
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return redirect(url_for('admin_users'))
+
+# =========================
+# ADMIN - ACTIVITY LOGS
+# =========================
+
+
+@app.route('/admin/logs')
+def admin_logs():
+
+    # Only admin allowed
+    if 'user_id' not in session or session.get('role') != 'admin':
+        return "Unauthorized", 403
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute("""
+        SELECT 
+            username, 
+            action, 
+            details, 
+            CONVERT_TZ(timestamp, '+00:00', '+08:00') AS timestamp
+        FROM activity_logs
+        ORDER BY timestamp DESC
+    """)
+    logs = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    return render_template('admin_logs.html', logs=logs)
 
 
 # =========================

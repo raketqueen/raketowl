@@ -1,3 +1,5 @@
+SET FOREIGN_KEY_CHECKS=0;
+
 -- =========================
 -- INIT.SQL - RaketOwl
 -- Full layout with internal collaboration
@@ -56,6 +58,30 @@ CREATE TABLE IF NOT EXISTS document_shares (
 );
 
 -- =========================
+-- GROUPS MASTER TABLE
+-- =========================
+CREATE TABLE IF NOT EXISTS groups_master (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) UNIQUE NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =========================
+-- USER-GROUP MAPPING TABLE
+-- =========================
+CREATE TABLE IF NOT EXISTS user_groups (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    group_id INT NOT NULL,
+
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (group_id) REFERENCES groups_master(id) ON DELETE CASCADE,
+
+    UNIQUE KEY unique_user_group (user_id, group_id)
+);
+
+-- =========================
 -- ACTIVITY LOGS TABLE
 -- =========================
 CREATE TABLE IF NOT EXISTS activity_logs (
@@ -66,11 +92,5 @@ CREATE TABLE IF NOT EXISTS activity_logs (
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- =========================
--- OPTIONAL: Example internal sharing (for testing)
--- =========================
--- Uncomment if you have users and documents to test sharing
--- INSERT INTO document_shares (document_id, shared_with_user_id, permission)
--- VALUES
---     (1, 2, 'view'),   -- User 2 can view document 1
---     (1, 3, 'edit');   -- User 3 can edit document 1
+
+SET FOREIGN_KEY_CHECKS=1;

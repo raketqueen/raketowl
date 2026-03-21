@@ -230,6 +230,17 @@
 	    </form>
 
 	    {% endif %}
+	    
+	    <!-- User Management & Activity Logs Button -->
+	    {% if session.get('role') == 'admin' %}
+    		<a href="/admin/users" class="btn btn-warning btn-custom ms-3">
+        	    User Management
+    		</a>
+
+    		<a href="/admin/logs" class="btn btn-info btn-custom">
+        	    Activity Logs
+    		</a>
+	    {% endif %}
 	</div>	
 
     <!-- SEARCH BAR -->
