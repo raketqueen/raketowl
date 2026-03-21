@@ -26,3 +26,23 @@ A Dockerized document management system built with:
 ```bash
 git clone https://github.com/raketqueen/raketowl.git
 cd ~/raketowl
+```
+
+### 2. Build the Docker containers:
+
+```bash
+docker compose up --build -d
+```
+
+### 3. Initial Admin Account
+- Username: admin
+- Password: admin123 (hashed in init.sql)
+
+### 4. Stopping containers
+
+```bash
+docker compose down
+```
+
+# Author
+- Rommel Asis - Original Developer
