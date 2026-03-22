@@ -293,6 +293,34 @@
 
     			    {% if session.get('user_id') == doc.owner_id %}
 
+			    	<!-- =========================
+     					SHARE DOCUMENT
+				========================= -->
+				<form action="/share/{{ doc.id }}" method="POST" class="d-flex mt-1">
+
+				    <!-- USER DROPDOWN -->
+				    <select name="user_id" class="form-select form-select-sm me-1" style="max-width: 120px;" required>
+    					<option value="" disabled selected>User</option>
+    					{% for u in all_users %}
+        				    {% if u.id != session.get('user_id') %}
+            					<option value="{{ u.id }}">{{ u.username }}</option>
+        				    {% endif %}
+    					{% endfor %}
+				    </select>
+
+    				    <!-- PERMISSION -->
+    				    <select name="permission" class="form-select form-select-sm me-1" style="max-width: 90px;">
+        				<option value="view">View</option>
+        				<option value="edit">Edit</option>
+    				    </select>
+
+    				    <!-- SHARE BUTTON -->
+    				    <button type="submit" class="btn btn-sm btn-info">
+        				Share
+    				    </button>
+
+				</form>
+
         			<!-- TOGGLE PUBLIC / PRIVATE -->
         			<form action="/toggle_visibility/{{ doc.id }}" method="POST" style="display:inline;">
             			    {% if doc.is_public %}

@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template, request, redirect, session, url_for, send_file
+from flask import Flask, render_template, request, redirect, session, url_for, send_file, flash
 import mysql.connector
 from werkzeug.security import check_password_hash
 
@@ -40,9 +40,15 @@ def index():
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
-    if 'user_id' in session:
-        # Logged in user
+    all_users = []  # Initialize in case user not logged in
 
+    if 'user_id' in session:
+        # Fetch all users except the current user for the share dropdown
+        cursor.execute(
+            "SELECT id, username FROM users WHERE id != %s", (session['user_id'],))
+        all_users = cursor.fetchall()
+
+        # Logged in user: fetch documents
         if search:
             cursor.execute(
                 """
@@ -90,10 +96,8 @@ def index():
                 """,
                 (session['user_id'], session['user_id'])
             )
-
     else:
-        # Public view
-
+        # Public view only
         if search:
             cursor.execute(
                 """SELECT documents.id, documents.filename, documents.version, documents.owner_id, documents.is_public, users.username 
@@ -115,7 +119,7 @@ def index():
     cursor.close()
     conn.close()
 
-    return render_template('index.html', documents=documents, error=error)
+    return render_template('index.html', documents=documents, error=error, all_users=all_users)
 
 # =========================
 # LOGIN
@@ -375,6 +379,109 @@ def toggle_visibility(doc_id):
     return redirect(url_for('index'))
 
 # =========================
+# SHARE DOCUMENT WITH USER
+# =========================
+
+
+@app.route('/share/<int:doc_id>', methods=['POST'])
+def share_document(doc_id):
+
+    if 'user_id' not in session:
+        return redirect(url_for('index'))
+
+    try:
+        shared_user_id = int(request.form.get('user_id'))
+    except (TypeError, ValueError):
+        flash("Invalid user selected", "warning")
+        return redirect(url_for('index'))
+
+    permission = request.form.get('permission', 'view')  # default to 'view'
+
+    # Prevent sharing with self
+    if shared_user_id == session['user_id']:
+        flash("You cannot share a document with yourself", "warning")
+        return redirect(url_for('index'))
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Check if the user exists
+    cursor.execute(
+        "SELECT id, username FROM users WHERE id = %s", (shared_user_id,))
+    user = cursor.fetchone()
+    if not user:
+        cursor.close()
+        conn.close()
+        flash("Selected user does not exist", "warning")
+        return redirect(url_for('index'))
+
+    # Check ownership of the document
+    cursor.execute(
+        "SELECT owner_id, filename FROM documents WHERE id = %s",
+        (doc_id,)
+    )
+    doc = cursor.fetchone()
+    if not doc:
+        cursor.close()
+        conn.close()
+        flash("Document does not exist", "warning")
+        return redirect(url_for('index'))
+
+    owner_id, filename = doc
+    if owner_id != session['user_id']:
+        cursor.close()
+        conn.close()
+        flash("Unauthorized: You are not the owner", "danger")
+        return redirect(url_for('index'))
+
+    # Prevent duplicate share
+    cursor.execute(
+        """
+        SELECT id FROM document_shares
+        WHERE document_id = %s AND shared_with_user_id = %s
+        """,
+        (doc_id, shared_user_id)
+    )
+    existing = cursor.fetchone()
+
+    if existing:
+        # Update permission instead
+        cursor.execute(
+            """
+            UPDATE document_shares
+            SET permission = %s
+            WHERE document_id = %s AND shared_with_user_id = %s
+            """,
+            (permission, doc_id, shared_user_id)
+        )
+    else:
+        # Insert new share
+        cursor.execute(
+            """
+            INSERT INTO document_shares (document_id, shared_with_user_id, permission)
+            VALUES (%s, %s, %s)
+            """,
+            (doc_id, shared_user_id, permission)
+        )
+
+    # Log activity
+    cursor.execute(
+        "INSERT INTO activity_logs (username, action, details) VALUES (%s, %s, %s)",
+        (
+            session['username'],
+            'SHARE_DOCUMENT',
+            f"Shared '{filename}' with user_id={shared_user_id} ({permission})"
+        )
+    )
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    flash(f"Document '{filename}' shared successfully", "success")
+    return redirect(url_for('index'))
+
+# =========================
 # ADMIN - VIEW USERS
 # =========================
 
@@ -389,8 +496,20 @@ def admin_users():
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
-    # Get users
-    cursor.execute("SELECT id, username, role, created_at FROM users")
+    # Get users with groups (JOIN + GROUP_CONCAT)
+    cursor.execute("""
+        SELECT 
+            u.id,
+            u.username,
+            u.role,
+            u.created_at,
+            GROUP_CONCAT(g.name SEPARATOR ', ') AS user_groups
+        FROM users u
+        LEFT JOIN user_groups ug ON u.id = ug.user_id
+        LEFT JOIN groups_master g ON ug.group_id = g.id
+        GROUP BY u.id
+    """)
+
     users = cursor.fetchall()
 
     # Get groups
@@ -430,6 +549,8 @@ def create_group():
         )
         conn.commit()
 
+        flash(f"Group '{group_name}' created", "success")
+
         # Log activity
         cursor.execute(
             "INSERT INTO activity_logs (username, action, details) VALUES (%s, %s, %s)",
@@ -439,8 +560,251 @@ def create_group():
         conn.commit()
 
     except Exception as e:
-        print("Error creating group:", e)
+        flash("Error: Group may already exist", "warning")
 
+    cursor.close()
+    conn.close()
+
+    return redirect(url_for('admin_users'))
+
+# =========================
+# ADMIN - CREATE USER
+# =========================
+
+
+@app.route('/admin/create_user', methods=['POST'])
+def create_user():
+
+    # Admin only
+    if 'user_id' not in session or session.get('role') != 'admin':
+        return "Unauthorized", 403
+
+    username = request.form.get('username')
+    password = request.form.get('password')
+    role = request.form.get('role')
+    group_ids = request.form.getlist('groups')  # MULTI-SELECT
+
+    if not username or not password:
+        return redirect(url_for('admin_users'))
+
+    from werkzeug.security import generate_password_hash
+    hashed_password = generate_password_hash(password)
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Insert user
+    from mysql.connector import Error
+
+    try:
+        cursor.execute(
+            "INSERT INTO users (username, password, role) VALUES (%s, %s, %s)",
+            (username, hashed_password, role)
+        )
+        user_id = cursor.lastrowid
+
+    except Error as e:
+        if e.errno == 1062:  # Duplicate entry
+            flash("Error: Username already exists", "warning")
+            cursor.close()
+            conn.close()
+            return redirect(url_for('admin_users'))
+        else:
+            raise
+
+    user_id = cursor.lastrowid
+
+    # Insert user-group mapping
+    for group_id in group_ids:
+        cursor.execute(
+            "INSERT INTO user_groups (user_id, group_id) VALUES (%s, %s)",
+            (user_id, group_id)
+        )
+
+    # Log activity
+    cursor.execute(
+        "INSERT INTO activity_logs (username, action, details) VALUES (%s, %s, %s)",
+        (
+            session['username'],
+            'CREATE_USER',
+            f"Created user: {username}"
+        )
+    )
+
+    flash(f"User '{username}' created successfully", "success")
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return redirect(url_for('admin_users'))
+
+# =========================
+# ADMIN - EDIT USER
+# =========================
+
+
+@app.route('/admin/edit_user/<int:user_id>', methods=['GET', 'POST'])
+def edit_user(user_id):
+    # Admin only
+    if 'user_id' not in session or session.get('role') != 'admin':
+        return "Unauthorized", 403
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    if request.method == 'POST':
+        # POST = update user info
+        username = request.form.get('username')
+        role = request.form.get('role')
+        group_ids = request.form.getlist('groups')
+        new_password = request.form.get('password')
+
+        # Update username and role
+        cursor.execute(
+            "UPDATE users SET username = %s, role = %s WHERE id = %s",
+            (username, role, user_id)
+        )
+
+        # 🔐 RESET PASSWORD (ONLY IF PROVIDED)
+        if new_password:
+            from werkzeug.security import generate_password_hash
+            hashed_password = generate_password_hash(new_password)
+
+            cursor.execute(
+                "UPDATE users SET password = %s WHERE id = %s",
+                (hashed_password, user_id)
+            )
+
+            # Log password reset
+            cursor.execute(
+                "INSERT INTO activity_logs (username, action, details) VALUES (%s, %s, %s)",
+                (
+                    session['username'],
+                    'RESET_PASSWORD',
+                    f"Reset password for user: {username}"
+                )
+            )
+
+            flash(f"Password reset for '{username}'", "info")
+
+        # Update user_groups
+        cursor.execute(
+            "DELETE FROM user_groups WHERE user_id = %s", (user_id,))
+        for group_id in group_ids:
+            cursor.execute(
+                "INSERT INTO user_groups (user_id, group_id) VALUES (%s, %s)",
+                (user_id, group_id)
+            )
+
+        # Log activity
+        cursor.execute(
+            "INSERT INTO activity_logs (username, action, details) VALUES (%s, %s, %s)",
+            (
+                session['username'],
+                'EDIT_USER',
+                f"Edited user: {username}"
+            )
+        )
+
+        flash(f"User '{username}' updated successfully", "success")
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return redirect(url_for('admin_users'))
+
+        # Update username and role
+        cursor.execute(
+            "UPDATE users SET username = %s, role = %s WHERE id = %s",
+            (username, role, user_id)
+        )
+
+        # Update user_groups
+        cursor.execute(
+            "DELETE FROM user_groups WHERE user_id = %s", (user_id,))
+        for group_id in group_ids:
+            cursor.execute(
+                "INSERT INTO user_groups (user_id, group_id) VALUES (%s, %s)",
+                (user_id, group_id)
+            )
+
+        # Log activity
+        cursor.execute(
+            "INSERT INTO activity_logs (username, action, details) VALUES (%s, %s, %s)",
+            (session['username'], 'EDIT_USER', f"Edited user: {username}")
+        )
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return redirect(url_for('admin_users'))
+
+    else:
+        # GET = show edit form
+        cursor.execute(
+            "SELECT id, username, role FROM users WHERE id = %s", (user_id,))
+        user = cursor.fetchone()
+
+        cursor.execute(
+            "SELECT group_id FROM user_groups WHERE user_id = %s", (user_id,))
+        user_group_ids = [row['group_id'] for row in cursor.fetchall()]
+
+        cursor.execute("SELECT id, name FROM groups_master")
+        groups = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+
+        return render_template('edit_user.html', user=user, groups=groups, user_group_ids=user_group_ids)
+
+# =========================
+# ADMIN - DELETE USER
+# =========================
+
+
+@app.route('/admin/delete_user/<int:user_id>', methods=['POST'])
+def delete_user(user_id):
+
+    # Admin only
+    if 'user_id' not in session or session.get('role') != 'admin':
+        return "Unauthorized", 403
+
+    # Prevent self-delete (VERY IMPORTANT)
+    if user_id == session['user_id']:
+        return "You cannot delete your own account", 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Get username BEFORE delete (for logs)
+    cursor.execute("SELECT username FROM users WHERE id = %s", (user_id,))
+    user = cursor.fetchone()
+
+    if not user:
+        cursor.close()
+        conn.close()
+        return "User not found", 404
+
+    username_to_delete = user[0]
+
+    # Delete user (CASCADE will clean user_groups)
+    cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
+
+    # Log activity
+    cursor.execute(
+        "INSERT INTO activity_logs (username, action, details) VALUES (%s, %s, %s)",
+        (
+            session['username'],
+            'DELETE_USER',
+            f"Deleted user: {username_to_delete}"
+        )
+    )
+
+    flash(f"User '{username_to_delete}' deleted", "warning")
+
+    conn.commit()
     cursor.close()
     conn.close()
 
@@ -513,7 +877,8 @@ def delete_group(group_id):
     if count > 0:
         cursor.close()
         conn.close()
-        return "Cannot delete group: group is assigned to users", 400
+        flash("Cannot delete group: group is assigned to users", "warning")
+        return redirect(url_for('admin_users'))
 
     # Get group name BEFORE delete
     cursor.execute("SELECT name FROM groups_master WHERE id = %s", (group_id,))
@@ -536,6 +901,8 @@ def delete_group(group_id):
             f"Deleted group: {group_name}"
         )
     )
+
+    flash(f"Group '{group_name}' deleted", "warning")
 
     conn.commit()
     cursor.close()

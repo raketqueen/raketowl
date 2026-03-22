@@ -19,6 +19,33 @@ A Dockerized document management system built with:
 
 ---
 
+# Project Structure
+```
+raketowl/
+|-------app/                        # Flask app
+|        |----app.py                # Flask app routes & logic
+|        |----Dockerfile
+|        |----requirements.txt
+|        |----templates/            # HTML templates
+|              |----index.html
+|              |----admin_logs.html
+|              |----admin_users.html
+|              |----edit_user.html
+|-------nginx/                      # Nginx config
+|        |----Dockerfile
+|        |----nginx.conf
+|        |----413.html              # Oversize file notification page
+|-------docker-compose.yml          # Docker Compose file
+|-------init.sql                    # Initial MySQL setup & hashed admin password
+|-------README.md
+|-------.gitignore
+```
+
+# Requirements
+- Docker
+- Docker Compose
+- Web browser (Chrome, Firefox, etc.)
+
 ## 🐳 Run with Docker
 
 ### 1. Clone the repository
