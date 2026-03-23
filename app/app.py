@@ -116,10 +116,54 @@ def index():
 
     documents = cursor.fetchall()
 
+    # =========================
+    # FETCH SHARING INFO
+    # =========================
+
+    shared_map = {}
+
+    if 'user_id' in session:
+
+        conn2 = get_db_connection()
+        cursor2 = conn2.cursor(dictionary=True)
+
+        cursor2.execute("""
+            SELECT 
+                ds.document_id,
+                u.username,
+                ds.permission
+            FROM document_shares ds
+            JOIN users u ON ds.shared_with_user_id = u.id
+            WHERE ds.document_id IN (
+                SELECT id FROM documents WHERE owner_id = %s
+            )
+        """, (session['user_id'],))
+
+        shares = cursor2.fetchall()
+
+        # Build mapping: {doc_id: ["user (perm)", ...]}
+        for s in shares:
+            doc_id = s['document_id']
+            entry = f"{s['username']} ({s['permission']})"
+
+            if doc_id not in shared_map:
+                shared_map[doc_id] = []
+
+            shared_map[doc_id].append(entry)
+
+        cursor2.close()
+        conn2.close()
+
     cursor.close()
     conn.close()
 
-    return render_template('index.html', documents=documents, error=error, all_users=all_users)
+    return render_template(
+        'index.html',
+        documents=documents,
+        error=error,
+        shared_map=shared_map,
+        all_users=all_users
+    )
 
 # =========================
 # LOGIN
@@ -612,8 +656,6 @@ def create_user():
         else:
             raise
 
-    user_id = cursor.lastrowid
-
     # Insert user-group mapping
     for group_id in group_ids:
         cursor.execute(
@@ -713,32 +755,6 @@ def edit_user(user_id):
         cursor.close()
         conn.close()
 
-        return redirect(url_for('admin_users'))
-
-        # Update username and role
-        cursor.execute(
-            "UPDATE users SET username = %s, role = %s WHERE id = %s",
-            (username, role, user_id)
-        )
-
-        # Update user_groups
-        cursor.execute(
-            "DELETE FROM user_groups WHERE user_id = %s", (user_id,))
-        for group_id in group_ids:
-            cursor.execute(
-                "INSERT INTO user_groups (user_id, group_id) VALUES (%s, %s)",
-                (user_id, group_id)
-            )
-
-        # Log activity
-        cursor.execute(
-            "INSERT INTO activity_logs (username, action, details) VALUES (%s, %s, %s)",
-            (session['username'], 'EDIT_USER', f"Edited user: {username}")
-        )
-
-        conn.commit()
-        cursor.close()
-        conn.close()
         return redirect(url_for('admin_users'))
 
     else:

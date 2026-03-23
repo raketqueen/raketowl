@@ -265,6 +265,8 @@
                     <th>Owner</th>
                     <th>Version</th>
                     <th>Status</th>
+                    <th>User Share</th>
+                    <th>Group Share</th>
                     <th>Action</th>
                 </tr>
             </thead>
@@ -282,6 +284,20 @@
     			    {% else %}
         			<span class="badge bg-secondary">Private</span>
     			    {% endif %}
+			</td>
+
+			<td>
+    			    {% if shared_map.get(doc.id) %}
+        			{% for s in shared_map.get(doc.id) %}
+            			    <span class="badge bg-info text-dark">{{ s }}</span><br>
+        			{% endfor %}
+    			    {% else %}
+        			<span class="text-muted">-</span>
+    			    {% endif %}
+			</td>
+
+			<td>
+    			    <span class="text-muted">-</span>
 			</td>
 
 			<td>
@@ -349,7 +365,7 @@
         	    {% endfor %}
     		{% else %}
         	    <tr>
-            		<td colspan="4" class="center">No documents available</td>
+            		<td colspan="7" class="center">No documents available</td>
         	    </tr>
     		{% endif %}
 	    </tbody>

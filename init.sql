@@ -82,6 +82,22 @@ CREATE TABLE IF NOT EXISTS user_groups (
 );
 
 -- =========================
+-- DOCUMENT-GROUP SHARING TABLE
+-- Allows documents to be shared with groups
+-- =========================
+CREATE TABLE IF NOT EXISTS document_group_shares (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    document_id INT NOT NULL,
+    group_id INT NOT NULL,
+    permission ENUM('view','edit') DEFAULT 'view',
+
+    FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
+    FOREIGN KEY (group_id) REFERENCES groups_master(id) ON DELETE CASCADE,
+
+    UNIQUE KEY unique_doc_group (document_id, group_id)
+);
+
+-- =========================
 -- ACTIVITY LOGS TABLE
 -- =========================
 CREATE TABLE IF NOT EXISTS activity_logs (
