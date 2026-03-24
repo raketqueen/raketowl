@@ -54,7 +54,9 @@ CREATE TABLE IF NOT EXISTS document_shares (
     permission ENUM('view','edit') DEFAULT 'view',
 
     FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
-    FOREIGN KEY (shared_with_user_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (shared_with_user_id) REFERENCES users(id) ON DELETE CASCADE,
+
+    UNIQUE KEY unique_doc_user (document_id, shared_with_user_id)
 );
 
 -- =========================
