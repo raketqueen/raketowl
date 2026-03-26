@@ -12,7 +12,7 @@ DOCUMENTS_PATH = '/documents'
 app.config['DOCUMENTS_PATH'] = DOCUMENTS_PATH
 
 if not os.path.exists(DOCUMENTS_PATH):
-    os.makedirs(DOCUMENTS_PATH)
+    raise Exception("❌ Documents volume not mounted! Check docker-compose.")
 
 # =========================
 # DATABASE CONNECTION
@@ -130,6 +130,7 @@ def index():
         cursor2.execute("""
             SELECT 
                 ds.document_id,
+                ds.shared_with_user_id,
                 u.username,
                 ds.permission
             FROM document_shares ds
@@ -144,7 +145,10 @@ def index():
         # Build mapping: {doc_id: ["user (perm)", ...]}
         for s in shares:
             doc_id = s['document_id']
-            entry = f"{s['username']} ({s['permission']})"
+            entry = {
+                "display": f"{s['username']} ({s['permission']})",
+                "user_id": s['shared_with_user_id']
+            }
 
             if doc_id not in shared_map:
                 shared_map[doc_id] = []
@@ -164,6 +168,72 @@ def index():
         shared_map=shared_map,
         all_users=all_users
     )
+
+# =========================
+# UNSHARE DOCUMENT (USER)
+# =========================
+
+
+@app.route('/unshare/<int:doc_id>', methods=['POST'])
+def unshare_document(doc_id):
+
+    if 'user_id' not in session:
+        return redirect(url_for('index'))
+
+    try:
+        target_user_id = int(request.form.get('user_id'))
+    except (TypeError, ValueError):
+        flash("Invalid user", "warning")
+        return redirect(url_for('index'))
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Check ownership
+    cursor.execute(
+        "SELECT owner_id, filename FROM documents WHERE id = %s",
+        (doc_id,)
+    )
+    doc = cursor.fetchone()
+
+    if not doc:
+        cursor.close()
+        conn.close()
+        flash("Document not found", "danger")
+        return redirect(url_for('index'))
+
+    owner_id, filename = doc
+
+    if owner_id != session['user_id']:
+        cursor.close()
+        conn.close()
+        flash("Unauthorized", "danger")
+        return redirect(url_for('index'))
+
+    # Delete share
+    cursor.execute(
+        """
+        DELETE FROM document_shares
+        WHERE document_id = %s AND shared_with_user_id = %s
+        """,
+        (doc_id, target_user_id)
+    )
+
+    # Log
+    cursor.execute(
+        "INSERT INTO activity_logs (username, action, details) VALUES (%s, %s, %s)",
+        (
+            session['username'],
+            'UNSHARE_DOCUMENT',
+            f"Removed access for user_id={target_user_id} from '{filename}'"
+        )
+    )
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return redirect(url_for('index'))
 
 # =========================
 # LOGIN

@@ -289,7 +289,25 @@
 			<td>
     			    {% if shared_map.get(doc.id) %}
         			{% for s in shared_map.get(doc.id) %}
-            			    <span class="badge bg-info text-dark">{{ s }}</span><br>
+            			    <div class="d-flex align-items-center mb-1">
+
+                			<span class="badge bg-info text-dark me-1">
+                    			    {{ s.display }}
+                			</span>
+
+                			{% if session.get('user_id') == doc.owner_id %}
+                			<form action="/unshare/{{ doc.id }}" method="POST" style="display:inline;">
+                    			    <input type="hidden" name="user_id" value="{{ s.user_id }}">
+
+                    			    <button type="submit"
+                            			    class="btn btn-sm btn-danger"
+                            			    onclick="return confirm('Remove access for this user?');">
+                        			✖
+                    			    </button>
+                			</form>
+                			{% endif %}
+
+            			    </div>
         			{% endfor %}
     			    {% else %}
         			<span class="text-muted">-</span>
