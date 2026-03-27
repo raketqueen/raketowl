@@ -309,27 +309,101 @@ def upload():
         return "No file selected", 400
 
     filename = file.filename
-    is_public = 1 if request.form.get('is_public') == 'on' else 0
-
-    # Save file to external storage
     filepath = os.path.join(app.config['DOCUMENTS_PATH'], filename)
-    file.save(filepath)
 
     conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
 
-    # ✅ INSERT aligned with your schema
+    # =========================
+    # STEP 1: CHECK IF DOCUMENT EXISTS (BY FILENAME)
+    # =========================
     cursor.execute(
-        """INSERT INTO documents 
-        (filename, filepath, owner_id, version, is_public) 
-        VALUES (%s, %s, %s, %s, %s)""",
-        (filename, filepath, session['user_id'], 1, is_public)
+        """
+        SELECT id, owner_id, version
+        FROM documents
+        WHERE filename = %s
+        """,
+        (filename,)
     )
+    doc = cursor.fetchone()
 
-    # Activity log
+    if doc:
+        doc_id = doc['id']
+        owner_id = doc['owner_id']
+        current_version = doc['version']
+
+        # =========================
+        # STEP 2: CHECK PERMISSION
+        # =========================
+
+        is_owner = (session['user_id'] == owner_id)
+
+        cursor.execute(
+            """
+            SELECT permission FROM document_shares
+            WHERE document_id = %s AND shared_with_user_id = %s
+            """,
+            (doc_id, session['user_id'])
+        )
+        share = cursor.fetchone()
+
+        has_edit_permission = share and share['permission'] == 'edit'
+
+        # =========================
+        # STEP 3: AUTHORIZE
+        # =========================
+
+        if not is_owner and not has_edit_permission:
+            cursor.close()
+            conn.close()
+            flash("You only have VIEW access. Upload not allowed.", "warning")
+            return redirect(url_for('index'))
+
+        # =========================
+        # STEP 4: UPDATE DOCUMENT (VERSIONING)
+        # =========================
+
+        new_version = current_version + 1
+
+        # Overwrite file
+        file.save(filepath)
+
+        cursor.execute(
+            """
+            UPDATE documents
+            SET version = %s, filepath = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+            """,
+            (new_version, filepath, doc_id)
+        )
+
+        action_text = f"Updated '{filename}' to version {new_version}"
+
+    else:
+        # =========================
+        # NEW DOCUMENT (OWNER ONLY)
+        # =========================
+
+        file.save(filepath)
+
+        cursor.execute(
+            """
+            INSERT INTO documents 
+            (filename, filepath, owner_id, version, is_public)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (filename, filepath, session['user_id'], 1, 0)
+        )
+
+        action_text = f"Uploaded new file '{filename}'"
+
+    # =========================
+    # ACTIVITY LOG
+    # =========================
+
     cursor.execute(
         "INSERT INTO activity_logs (username, action, details) VALUES (%s, %s, %s)",
-        (session['username'], 'UPLOAD', f'Uploaded {filename}')
+        (session['username'], 'UPLOAD', action_text)
     )
 
     conn.commit()

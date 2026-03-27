@@ -194,6 +194,16 @@
     	</div>
     	{% endif %}
 
+	{% with messages = get_flashed_messages(with_categories=true) %}
+    	    {% if messages %}
+        	{% for category, message in messages %}
+            	    <div class="alert alert-{{ category }} text-center mt-2">
+                	{{ message }}
+            	    </div>
+       		{% endfor %}
+    	    {% endif %}
+	{% endwith %}
+
     <!-- TOP CONTROLS -->
 	<div class="d-flex justify-content-center align-items-center mt-3 flex-wrap">
 
@@ -214,6 +224,10 @@
 
     	    <!-- Upload Form (NOW MOVED HERE) -->
 	    {% if session.get('user_id') %}
+	    
+	    <small class="text-warning ms-3">
+    		Uploading a file with the same name will update its version if you have edit access.
+	    </small>
 
 	    <form action="/upload" method="POST" enctype="multipart/form-data" class="d-flex align-items-center ms-3">
 
