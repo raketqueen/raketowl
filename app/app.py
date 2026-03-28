@@ -77,14 +77,14 @@ def index():
         else:
             cursor.execute(
                 """
-                SELECT DISTINCT
+                SELECT
                     documents.id,
                     documents.filename,
                     documents.version,
                     documents.owner_id,
                     documents.is_public,
                     users.username,
-                    document_shares.permission
+                    MAX(document_shares.permission) AS permission
                 FROM documents
                 JOIN users ON documents.owner_id = users.id
                 LEFT JOIN document_shares
@@ -93,6 +93,7 @@ def index():
                     documents.owner_id = %s
                     OR documents.is_public = 1
                     OR document_shares.shared_with_user_id = %s
+                GROUP BY documents.id
                 """,
                 (session['user_id'], session['user_id'])
             )
