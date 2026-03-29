@@ -7,6 +7,7 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ThunderKats1973
       MYSQL_DATABASE: raketowl
+    command: --default-time-zone=+08:00
     volumes:
       - /dockers/raketowl/mysql:/var/lib/mysql
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql

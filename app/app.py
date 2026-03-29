@@ -1,3 +1,4 @@
+import time
 import os
 from flask import Flask, render_template, request, redirect, session, url_for, send_file, flash
 import mysql.connector
@@ -20,12 +21,19 @@ if not os.path.exists(DOCUMENTS_PATH):
 
 
 def get_db_connection():
-    return mysql.connector.connect(
-        host='db',
-        user='root',
-        password='ThunderKats1973',
-        database='raketowl'
-    )
+    for i in range(20):  # 20 retries
+        try:
+            return mysql.connector.connect(
+                host='db',
+                user='root',
+                password='ThunderKats1973',
+                database='raketowl'
+            )
+        except mysql.connector.Error:
+            print(f"DB not ready... retry {i+1}/20")
+            time.sleep(3)
+
+    raise Exception("Database not ready after retries")
 
 # =========================
 # HOME PAGE
@@ -37,7 +45,11 @@ def index():
     error = request.args.get('error')
     search = request.args.get('search')
 
-    conn = get_db_connection()
+    try:
+        conn = get_db_connection()
+    except Exception:
+        return "System is starting up, please refresh in a few seconds.", 503
+
     cursor = conn.cursor(dictionary=True)
 
     all_users = []  # Initialize in case user not logged in
@@ -1090,8 +1102,8 @@ def admin_logs():
         SELECT 
             username, 
             action, 
-            details, 
-            CONVERT_TZ(timestamp, '+00:00', '+08:00') AS timestamp
+            details,
+            timestamp
         FROM activity_logs
         ORDER BY timestamp DESC
     """)
