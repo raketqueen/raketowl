@@ -14,8 +14,17 @@ A Dockerized document management system built with:
 - User authentication (login/logout)
 - File upload & download
 - Private & public document visibility
+- User and Group management UI
 - Activity logging
-- Dark / Light theme UI
+- Dark / Light theme UI accross pages
+
+---
+
+## 🛠️ In Development
+
+- User View/Edit permission
+- Group View/Edit permission
+- Timestamp sync across the system
 
 ---
 
@@ -41,7 +50,7 @@ raketowl/
 |-------.gitignore
 ```
 
-# Requirements
+# 🔩 Requirements
 - Docker
 - Docker Compose
 - Web browser (Chrome, Firefox, etc.)
