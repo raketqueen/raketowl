@@ -20,7 +20,7 @@ A Dockerized document management system built with:
 
 ---
 
-## 🛠️ In Development
+## 🏗️ In Development
 
 - User View/Edit permission
 - Group View/Edit permission
@@ -28,7 +28,7 @@ A Dockerized document management system built with:
 
 ---
 
-# Project Structure
+## 🌐 Project Structure
 ```
 raketowl/
 |-------app/                        # Flask app
@@ -50,12 +50,12 @@ raketowl/
 |-------.gitignore
 ```
 
-# 🔩 Requirements
+## 🔩 Requirements
 - Docker
 - Docker Compose
 - Web browser (Chrome, Firefox, etc.)
 
-## 🐳 Run with Docker
+# 🐳 Run with Docker
 
 ### 1. Clone the repository
 
