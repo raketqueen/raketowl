@@ -323,7 +323,50 @@
 			</td>
 
 			<td>
+
+			<!-- EXISTING GROUP SHARES DISPLAY -->
+			{% if group_shared_map.get(doc.id) %}
+    			    {% for g in group_shared_map.get(doc.id) %}
+        			<div class="d-flex align-items-center mb-1">
+
+            			    <span class="badge bg-secondary me-1">
+                			{{ g.display }}
+            			    </span>
+
+        			</div>
+    			    {% endfor %}
+			{% else %}
     			    <span class="text-muted">-</span>
+			{% endif %}
+
+			<!-- SHARE FORM (OWNER ONLY) -->
+			{% if session.get('user_id') == doc.owner_id %}
+
+			<form action="/share_group/{{ doc.id }}" method="POST" class="d-flex mt-1">
+
+    			    <!-- GROUP DROPDOWN -->
+    			    <select name="group_id" class="form-select form-select-sm me-1" style="max-width: 120px;" required>
+        			<option value="" disabled selected>Group</option>
+        			{% for g in all_groups %}
+            			    <option value="{{ g.id }}">{{ g.name }}</option>
+        			{% endfor %}
+    			    </select>
+
+    			    <!-- PERMISSION -->
+    			    <select name="permission" class="form-select form-select-sm me-1" style="max-width: 90px;">
+        			<option value="view">View</option>
+        			<option value="edit">Edit</option>
+    			    </select>
+
+    			    <!-- SHARE BUTTON -->
+    			    <button type="submit" class="btn btn-sm btn-secondary">
+        			Share
+    			    </button>
+
+			</form>
+
+			{% endif %}
+
 			</td>
 
 			<td>

@@ -53,6 +53,7 @@ def index():
     cursor = conn.cursor(dictionary=True)
 
     all_users = []  # Initialize in case user not logged in
+    all_groups = []  # NEW: groups list for UI
 
     if 'user_id' in session:
         # Fetch all users except the current user for the share dropdown
@@ -60,54 +61,102 @@ def index():
             "SELECT id, username FROM users WHERE id != %s", (session['user_id'],))
         all_users = cursor.fetchall()
 
+        # NEW: Fetch all groups for group sharing dropdown
+        cursor.execute("SELECT id, name FROM groups_master")
+        all_groups = cursor.fetchall()
+
         # Logged in user: fetch documents
         if search:
             cursor.execute(
                 """
                 SELECT DISTINCT
-                    documents.id,
-                    documents.filename,
-                    documents.version,
-                    documents.owner_id,
-                    documents.is_public,
-                    users.username,
-                    document_shares.permission
-                FROM documents
-                JOIN users ON documents.owner_id = users.id
-                LEFT JOIN document_shares
-                    ON documents.id = document_shares.document_id
+                    d.id,
+                    d.filename,
+                    d.version,
+                    d.owner_id,
+                    d.is_public,
+                    u.username,
+                    CASE
+                        WHEN ds.shared_with_user_id = %s THEN ds.permission
+                        WHEN dgs.permission IS NOT NULL THEN dgs.permission
+                        ELSE NULL
+                    END AS permission
+                FROM documents d
+                JOIN users u ON d.owner_id = u.id
+
+                LEFT JOIN document_shares ds
+                    ON d.id = ds.document_id
+
+                LEFT JOIN document_group_shares dgs
+                    ON d.id = dgs.document_id
+
+                LEFT JOIN user_groups ug
+                    ON ug.group_id = dgs.group_id
+                    AND ug.user_id = %s
+
                 WHERE
                     (
-                        documents.owner_id = %s
-                        OR documents.is_public = 1
-                        OR document_shares.shared_with_user_id = %s
+                        d.owner_id = %s
+                        OR d.is_public = 1
+                        OR ds.shared_with_user_id = %s
+                        OR ug.user_id = %s
                     )
-                    AND documents.filename LIKE %s
+                    AND d.filename LIKE %s
                 """,
-                (session['user_id'], session['user_id'], f"%{search}%")
+                (
+                    session['user_id'],  # direct share priority
+                    session['user_id'],  # group mapping
+                    session['user_id'],  # owner
+                    session['user_id'],  # direct
+                    session['user_id'],  # group
+                    f"%{search}%"
+                )
             )
         else:
             cursor.execute(
                 """
                 SELECT
-                    documents.id,
-                    documents.filename,
-                    documents.version,
-                    documents.owner_id,
-                    documents.is_public,
-                    users.username,
-                    MAX(document_shares.permission) AS permission
-                FROM documents
-                JOIN users ON documents.owner_id = users.id
-                LEFT JOIN document_shares
-                    ON documents.id = document_shares.document_id
+                    d.id,
+                    d.filename,
+                    d.version,
+                    d.owner_id,
+                    d.is_public,
+                    u.username,
+                    MAX(
+                        CASE
+                            WHEN ds.shared_with_user_id = %s THEN ds.permission
+                            WHEN dgs.permission IS NOT NULL THEN dgs.permission
+                            ELSE NULL
+                        END
+                    ) AS permission
+                FROM documents d
+                JOIN users u ON d.owner_id = u.id
+
+                LEFT JOIN document_shares ds
+                    ON d.id = ds.document_id
+
+                LEFT JOIN document_group_shares dgs
+                    ON d.id = dgs.document_id
+
+                LEFT JOIN user_groups ug
+                    ON ug.group_id = dgs.group_id
+                    AND ug.user_id = %s
+
                 WHERE
-                    documents.owner_id = %s
-                    OR documents.is_public = 1
-                    OR document_shares.shared_with_user_id = %s
-                GROUP BY documents.id
+                    d.owner_id = %s
+                    OR d.is_public = 1
+                    OR ds.shared_with_user_id = %s
+                    OR ug.user_id = %s
+
+                GROUP BY d.id
                 """,
-                (session['user_id'], session['user_id'])
+                (
+                    session['user_id'],  # CASE (direct share priority)
+                    session['user_id'],  # user_groups join
+                    session['user_id'],  # owner
+                    session['user_id'],  # direct share
+                    session['user_id']   # group access
+                )
             )
     else:
         # Public view only
@@ -130,16 +179,41 @@ def index():
     documents = cursor.fetchall()
 
     # =========================
+    # RESOLVE FINAL PERMISSION
+    # =========================
+    if 'user_id' in session:
+
+        for doc in documents:
+
+            # OWNER always full access
+            if doc['owner_id'] == session.get('user_id'):
+                doc['final_permission'] = 'owner'
+                continue
+
+            perm = doc.get('permission')
+
+            if perm:
+                doc['final_permission'] = perm
+            elif doc['is_public']:
+                doc['final_permission'] = 'view'
+            else:
+                doc['final_permission'] = None
+
+    # =========================
     # FETCH SHARING INFO
     # =========================
 
     shared_map = {}
+    group_shared_map = {}  # NEW
 
     if 'user_id' in session:
 
         conn2 = get_db_connection()
         cursor2 = conn2.cursor(dictionary=True)
 
+        # =========================
+        # USER SHARES
+        # =========================
         cursor2.execute("""
             SELECT 
                 ds.document_id,
@@ -155,7 +229,6 @@ def index():
 
         shares = cursor2.fetchall()
 
-        # Build mapping: {doc_id: ["user (perm)", ...]}
         for s in shares:
             doc_id = s['document_id']
             entry = {
@@ -168,6 +241,36 @@ def index():
 
             shared_map[doc_id].append(entry)
 
+        # =========================
+        # GROUP SHARES (NEW)
+        # =========================
+        cursor2.execute("""
+            SELECT 
+                dgs.document_id,
+                g.name AS group_name,
+                dgs.permission,
+                g.id AS group_id
+            FROM document_group_shares dgs
+            JOIN groups_master g ON dgs.group_id = g.id
+            WHERE dgs.document_id IN (
+                SELECT id FROM documents WHERE owner_id = %s
+            )
+        """, (session['user_id'],))
+
+        group_shares = cursor2.fetchall()
+
+        for g in group_shares:
+            doc_id = g['document_id']
+            entry = {
+                "display": f"{g['group_name']} ({g['permission']})",
+                "group_id": g['group_id']
+            }
+
+            if doc_id not in group_shared_map:
+                group_shared_map[doc_id] = []
+
+            group_shared_map[doc_id].append(entry)
+
         cursor2.close()
         conn2.close()
 
@@ -179,7 +282,9 @@ def index():
         documents=documents,
         error=error,
         shared_map=shared_map,
-        all_users=all_users
+        group_shared_map=group_shared_map,
+        all_users=all_users,
+        all_groups=all_groups
     )
 
 # =========================
@@ -362,11 +467,23 @@ def upload():
 
         has_edit_permission = share and share['permission'] == 'edit'
 
+        # GROUP PERMISSION CHECK
+        cursor.execute("""
+            SELECT dgs.permission
+            FROM document_group_shares dgs
+            JOIN user_groups ug ON dgs.group_id = ug.group_id
+            WHERE dgs.document_id = %s AND ug.user_id = %s
+        """, (doc_id, session['user_id']))
+
+        group_share = cursor.fetchone()
+
+        has_group_edit = group_share and group_share['permission'] == 'edit'
+
         # =========================
         # STEP 3: AUTHORIZE
         # =========================
 
-        if not is_owner and not has_edit_permission:
+        if not is_owner and not has_edit_permission and not has_group_edit:
             cursor.close()
             conn.close()
             flash("You only have VIEW access. Upload not allowed.", "warning")
@@ -448,29 +565,57 @@ def download(doc_id):
     if not doc:
         return "File not found", 404
 
-    # Access control
-    if not doc['is_public']:
+    # =========================
+    # ACCESS CONTROL (FINAL PERMISSION)
+    # =========================
 
-        if 'user_id' not in session:
+    if 'user_id' not in session:
+        # Only allow public access
+        if not doc['is_public']:
             return "Unauthorized", 403
-
+    else:
         conn = get_db_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(dictionary=True)
 
-        # Check if shared
-        cursor.execute(
-            """
-            SELECT permission FROM document_shares
+        # Get USER permission
+        cursor.execute("""
+            SELECT permission
+            FROM document_shares
             WHERE document_id = %s AND shared_with_user_id = %s
-            """,
-            (doc_id, session['user_id'])
-        )
-        shared = cursor.fetchone()
+        """, (doc_id, session['user_id']))
+        user_perm = cursor.fetchone()
+
+        # Get GROUP permission
+        cursor.execute("""
+            SELECT MAX(dgs.permission) AS permission
+            FROM document_group_shares dgs
+            JOIN user_groups ug ON dgs.group_id = ug.group_id
+            WHERE dgs.document_id = %s AND ug.user_id = %s
+        """, (doc_id, session['user_id']))
+        group_perm = cursor.fetchone()
 
         cursor.close()
         conn.close()
 
-        if session['user_id'] != doc['owner_id'] and not shared:
+        # =========================
+        # RESOLVE FINAL PERMISSION
+        # =========================
+        if doc['owner_id'] == session['user_id']:
+            final_permission = 'owner'
+
+        elif user_perm:
+            final_permission = user_perm['permission']
+
+        elif group_perm and group_perm['permission']:
+            final_permission = group_perm['permission']
+
+        elif doc['is_public']:
+            final_permission = 'view'
+
+        else:
+            final_permission = None
+
+        if final_permission is None:
             return "Unauthorized", 403
 
     return send_file(doc['filepath'], as_attachment=True)
@@ -680,6 +825,94 @@ def share_document(doc_id):
     conn.close()
 
     flash(f"Document '{filename}' shared successfully", "success")
+    return redirect(url_for('index'))
+
+# =========================
+# SHARE DOCUMENT WITH GROUP
+# =========================
+
+
+@app.route('/share_group/<int:doc_id>', methods=['POST'])
+def share_group(doc_id):
+
+    if 'user_id' not in session:
+        return redirect(url_for('index'))
+
+    try:
+        group_id = int(request.form.get('group_id'))
+    except (TypeError, ValueError):
+        flash("Invalid group selected", "warning")
+        return redirect(url_for('index'))
+
+    permission = request.form.get('permission', 'view')
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Check ownership
+    cursor.execute(
+        "SELECT owner_id, filename FROM documents WHERE id = %s",
+        (doc_id,)
+    )
+    doc = cursor.fetchone()
+
+    if not doc:
+        cursor.close()
+        conn.close()
+        flash("Document not found", "danger")
+        return redirect(url_for('index'))
+
+    owner_id, filename = doc
+
+    if owner_id != session['user_id']:
+        cursor.close()
+        conn.close()
+        flash("Unauthorized", "danger")
+        return redirect(url_for('index'))
+
+    # Check existing share
+    cursor.execute(
+        """
+        SELECT id FROM document_group_shares
+        WHERE document_id = %s AND group_id = %s
+        """,
+        (doc_id, group_id)
+    )
+    existing = cursor.fetchone()
+
+    if existing:
+        cursor.execute(
+            """
+            UPDATE document_group_shares
+            SET permission = %s
+            WHERE document_id = %s AND group_id = %s
+            """,
+            (permission, doc_id, group_id)
+        )
+    else:
+        cursor.execute(
+            """
+            INSERT INTO document_group_shares (document_id, group_id, permission)
+            VALUES (%s, %s, %s)
+            """,
+            (doc_id, group_id, permission)
+        )
+
+    # Log activity
+    cursor.execute(
+        "INSERT INTO activity_logs (username, action, details) VALUES (%s, %s, %s)",
+        (
+            session['username'],
+            'GROUP_SHARE',
+            f"Shared doc_id={doc_id} with group_id={group_id} ({permission})"
+        )
+    )
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    flash("Group sharing updated", "success")
     return redirect(url_for('index'))
 
 # =========================
