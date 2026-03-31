@@ -327,14 +327,26 @@
 			<!-- EXISTING GROUP SHARES DISPLAY -->
 			{% if group_shared_map.get(doc.id) %}
     			    {% for g in group_shared_map.get(doc.id) %}
-        			<div class="d-flex align-items-center mb-1">
+    			    	<div class="d-flex align-items-center mb-1">
 
-            			    <span class="badge bg-secondary me-1">
-                			{{ g.display }}
-            			    </span>
+        			    <span class="badge bg-secondary me-1">
+            				{{ g.display }}
+        			    </span>
 
-        			</div>
-    			    {% endfor %}
+        			    {% if session.get('user_id') == doc.owner_id %}
+        			    <form action="/unshare_group/{{ doc.id }}" method="POST" style="display:inline;">
+            				<input type="hidden" name="group_id" value="{{ g.group_id }}">
+
+            				<button type="submit"
+                    				class="btn btn-sm btn-danger"
+                    				onclick="return confirm('Remove access for this group?');">
+                			    ✖
+            				</button>
+        			    </form>
+        			    {% endif %}
+
+    				</div>
+			    {% endfor %}
 			{% else %}
     			    <span class="text-muted">-</span>
 			{% endif %}

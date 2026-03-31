@@ -354,6 +354,72 @@ def unshare_document(doc_id):
     return redirect(url_for('index'))
 
 # =========================
+# UNSHARE DOCUMENT (GROUP)
+# =========================
+
+
+@app.route('/unshare_group/<int:doc_id>', methods=['POST'])
+def unshare_group(doc_id):
+
+    if 'user_id' not in session:
+        return redirect(url_for('index'))
+
+    try:
+        group_id = int(request.form.get('group_id'))
+    except (TypeError, ValueError):
+        flash("Invalid group", "warning")
+        return redirect(url_for('index'))
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Check ownership
+    cursor.execute(
+        "SELECT owner_id, filename FROM documents WHERE id = %s",
+        (doc_id,)
+    )
+    doc = cursor.fetchone()
+
+    if not doc:
+        cursor.close()
+        conn.close()
+        flash("Document not found", "danger")
+        return redirect(url_for('index'))
+
+    owner_id, filename = doc
+
+    if owner_id != session['user_id']:
+        cursor.close()
+        conn.close()
+        flash("Unauthorized", "danger")
+        return redirect(url_for('index'))
+
+    # DELETE GROUP SHARE
+    cursor.execute(
+        """
+        DELETE FROM document_group_shares
+        WHERE document_id = %s AND group_id = %s
+        """,
+        (doc_id, group_id)
+    )
+
+    # Log
+    cursor.execute(
+        "INSERT INTO activity_logs (username, action, details) VALUES (%s, %s, %s)",
+        (
+            session['username'],
+            'UNSHARE_GROUP',
+            f"Removed group_id={group_id} from '{filename}'"
+        )
+    )
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+    return redirect(url_for('index'))
+
+# =========================
 # LOGIN
 # =========================
 
@@ -451,39 +517,43 @@ def upload():
         current_version = doc['version']
 
         # =========================
-        # STEP 2: CHECK PERMISSION
+        # STEP 2: RESOLVE FINAL PERMISSION
         # =========================
 
-        is_owner = (session['user_id'] == owner_id)
+        final_permission = None
 
-        cursor.execute(
-            """
-            SELECT permission FROM document_shares
-            WHERE document_id = %s AND shared_with_user_id = %s
-            """,
-            (doc_id, session['user_id'])
-        )
-        share = cursor.fetchone()
+        # OWNER
+        if session['user_id'] == owner_id:
+            final_permission = 'owner'
 
-        has_edit_permission = share and share['permission'] == 'edit'
+        else:
+            # USER SHARE
+            cursor.execute("""
+                SELECT permission
+                FROM document_shares
+                WHERE document_id = %s AND shared_with_user_id = %s
+            """, (doc_id, session['user_id']))
+            user_perm = cursor.fetchone()
 
-        # GROUP PERMISSION CHECK
-        cursor.execute("""
-            SELECT dgs.permission
-            FROM document_group_shares dgs
-            JOIN user_groups ug ON dgs.group_id = ug.group_id
-            WHERE dgs.document_id = %s AND ug.user_id = %s
-        """, (doc_id, session['user_id']))
+            # GROUP SHARE
+            cursor.execute("""
+                SELECT MAX(dgs.permission) AS permission
+                FROM document_group_shares dgs
+                JOIN user_groups ug ON dgs.group_id = ug.group_id
+                WHERE dgs.document_id = %s AND ug.user_id = %s
+            """, (doc_id, session['user_id']))
+            group_perm = cursor.fetchone()
 
-        group_share = cursor.fetchone()
-
-        has_group_edit = group_share and group_share['permission'] == 'edit'
+            if user_perm:
+                final_permission = user_perm['permission']
+            elif group_perm and group_perm['permission']:
+                final_permission = group_perm['permission']
 
         # =========================
         # STEP 3: AUTHORIZE
         # =========================
 
-        if not is_owner and not has_edit_permission and not has_group_edit:
+        if final_permission not in ['owner', 'edit']:
             cursor.close()
             conn.close()
             flash("You only have VIEW access. Upload not allowed.", "warning")

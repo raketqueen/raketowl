@@ -1,4 +1,4 @@
-# 📂 RaketOwl Filing Cabinet (Under Development)
+# 📂 RaketOwl Filing Cabinet (Under Development - Alpha)
 
 A Dockerized document management system built with:
 
@@ -14,7 +14,7 @@ A Dockerized document management system built with:
 - User authentication (login/logout)
 - File upload & download
 - Private & public document visibility
-- User and Group management UI
+- User and Group management UI (Enforce Permission)
 - Activity logging
 - Dark / Light theme UI accross pages
 
@@ -22,9 +22,9 @@ A Dockerized document management system built with:
 
 ## 🏗️ In Development
 
-- User View/Edit permission
-- Group View/Edit permission
-- Timestamp sync across the system
+- User View/Edit permission (refinement)
+- Group View/Edit permission (testing)
+- Timestamp sync across the system (completed in the database level)
 
 ---
 
