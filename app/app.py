@@ -337,13 +337,18 @@ def unshare_document(doc_id):
         (doc_id, target_user_id)
     )
 
+    # Get username
+    cursor.execute("SELECT username FROM users WHERE id = %s",
+                   (target_user_id,))
+    target_user = cursor.fetchone()[0]
+
     # Log
     cursor.execute(
         "INSERT INTO activity_logs (username, action, details) VALUES (%s, %s, %s)",
         (
             session['username'],
             'UNSHARE_DOCUMENT',
-            f"Removed access for user_id={target_user_id} from '{filename}'"
+            f"Removed access for {target_user} from '{filename}'"
         )
     )
 
@@ -403,13 +408,17 @@ def unshare_group(doc_id):
         (doc_id, group_id)
     )
 
+    # Get group name
+    cursor.execute("SELECT name FROM groups_master WHERE id = %s", (group_id,))
+    group_name = cursor.fetchone()[0]
+
     # Log
     cursor.execute(
         "INSERT INTO activity_logs (username, action, details) VALUES (%s, %s, %s)",
         (
             session['username'],
             'UNSHARE_GROUP',
-            f"Removed group_id={group_id} from '{filename}'"
+            f"Removed group '{group_name}' from '{filename}'"
         )
     )
 
@@ -880,13 +889,18 @@ def share_document(doc_id):
             (doc_id, shared_user_id, permission)
         )
 
+    # Get username of target user
+    cursor.execute("SELECT username FROM users WHERE id = %s",
+                   (shared_user_id,))
+    target_user = cursor.fetchone()[0]
+
     # Log activity
     cursor.execute(
         "INSERT INTO activity_logs (username, action, details) VALUES (%s, %s, %s)",
         (
             session['username'],
             'SHARE_DOCUMENT',
-            f"Shared '{filename}' with user_id={shared_user_id} ({permission})"
+            f"Shared '{filename}' with {target_user} ({permission})"
         )
     )
 
@@ -968,13 +982,17 @@ def share_group(doc_id):
             (doc_id, group_id, permission)
         )
 
+    # Get group name
+    cursor.execute("SELECT name FROM groups_master WHERE id = %s", (group_id,))
+    group_name = cursor.fetchone()[0]
+
     # Log activity
     cursor.execute(
         "INSERT INTO activity_logs (username, action, details) VALUES (%s, %s, %s)",
         (
             session['username'],
             'GROUP_SHARE',
-            f"Shared doc_id={doc_id} with group_id={group_id} ({permission})"
+            f"Shared '{filename}' with group '{group_name}' ({permission})"
         )
     )
 
