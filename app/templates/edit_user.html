@@ -64,6 +64,27 @@
         .center {
             text-align: center;
         }
+
+        /* FORM LABEL STYLING */
+        .form-container label {
+            color: #4169e1; /* royal blue */
+            font-weight: bold;
+        }
+
+        /* New Password → neon pink */
+        body.dark-mode .form-container label.password-label {
+            text-shadow: 
+                0 0 5px  #ff2bd6,
+                0 0 10px  #ff2bd6,
+                0 0 20px  #ff2bd6;
+            
+        }
+
+        /* Selected group highlight */
+        body.dark-mode select option:checked {
+            background-color: #ffc107; /* yellow */
+            color: #000;
+        }
     </style>
 </head>
 
@@ -113,14 +134,14 @@
 
 	    <!-- RESET PASSWORD -->
 	    <div>
-    		<label>New Password (leave blank to keep current)</label>
+    		<label class="password-label">New Password (leave blank to keep current)</label>
     		<input type="password" name="password" class="form-control">
 	    </div>
 
             <!-- ACTION BUTTONS -->
             <div class="center mt-3">
-                <button type="submit" class="btn btn-success btn-custom">Save Changes</button>
-                <a href="/admin/users" class="btn btn-secondary btn-custom">Cancel</a>
+                <button type="submit" class="btn btn-primary btn-custom">Save Changes</button>
+                <a href="/admin/users" class="btn btn-info btn-custom">Cancel</a>
             </div>
 
         </form>
