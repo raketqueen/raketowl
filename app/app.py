@@ -1419,21 +1419,43 @@ def admin_logs():
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
-    cursor.execute("""
+    # Get sort parameter
+    sort = request.args.get('sort', 'date')
+    order = request.args.get('order', 'desc')
+
+    # Whitelist (STRICT)
+    allowed_sort = {
+        'user': 'username',
+        'action': 'action',
+        'date': 'timestamp'
+    }
+
+    sort_column = allowed_sort.get(sort, 'timestamp')
+
+    order = 'ASC' if order == 'asc' else 'DESC'
+
+    query = f"""
         SELECT 
             username, 
             action, 
             details,
             timestamp
         FROM activity_logs
-        ORDER BY timestamp DESC
-    """)
+        ORDER BY {sort_column} {order}
+    """
+
+    cursor.execute(query)
     logs = cursor.fetchall()
 
     cursor.close()
     conn.close()
 
-    return render_template('admin_logs.html', logs=logs)
+    return render_template(
+        'admin_logs.html',
+        logs=logs,
+        current_sort=sort,
+        current_order=order.lower()
+    )
 
 
 # =========================
