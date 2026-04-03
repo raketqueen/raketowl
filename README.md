@@ -16,7 +16,7 @@ A Dockerized document management system built with:
 - Private & public document visibility
 - Private document collaboration via user or group (Enforce Permission)
 - User and Group management UI
-- Activity logging
+- Activity logging (with color code action)
 - Dark / Light theme UI accross pages
 
 ---
@@ -27,6 +27,7 @@ A Dockerized document management system built with:
 - Group View/Edit permission (POC testing)
 - Timestamp sync across the system (implemented in the database level)
 - UI alignment and polishing (refinement)
+- Log sort feature
 
 ---
 

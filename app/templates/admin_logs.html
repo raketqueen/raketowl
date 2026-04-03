@@ -78,6 +78,75 @@
             background-color: #2a2a2a !important;
             color: #ffffff !important;
         }
+
+        /* =========================
+        LOG COLOR CODING
+        ========================= */
+
+        .log-login {
+            color: #00bfff; /* neon blue */
+            font-weight: bold;
+        }
+
+        .log-logout {
+            color: #885050df; /* brown */
+            font-weight: bold;
+        }
+
+        .log-upload {
+            color: #00ff9f; /* neon green */
+            font-weight: bold;
+        }
+
+        .log-share {
+            color: #00ff9f; /* green */
+            font-weight: bold;
+        }
+
+        .log-unshare {
+            color: #FFBF00; /* amber */
+            font-weight: bold;
+        }
+
+        .log-group-share {
+            color: #47d04e;  /* bright green */
+            font-weight: bold;
+        }
+
+        .log-group-unshare {
+            color: #f09f57; /* bright amber */
+            font-weight: bold;
+        }
+
+        .log-delete {
+            color: #ff4d4d; /* red */
+            font-weight: bold;
+        }
+
+        .log-edit {
+            color: #ffc107; /* yellow */
+            font-weight: bold;
+        }
+
+        .log-reset {
+            color: #ff2bd6; /* neon pink */
+            font-weight: bold;
+        }
+
+        .log-visibility {
+            color: #00f5d4; /* cyan */
+            font-weight: bold;
+        }
+
+        .log-create-user {
+            color: #b0e4aa; /* light green */
+            font-weight: bold;
+        }
+
+        .log-create-group {
+            color: #c3cf79; /* light yellow */
+            font-weight: bold;
+        }
     </style>
 </head>
 
@@ -101,7 +170,7 @@
                     <th>User</th>
                     <th>Action</th>
                     <th>Details</th>
-                    <th>Timestamp</th>
+                    <th class="text-center">Timestamp</th>
                 </tr>
             </thead>
 
@@ -110,9 +179,61 @@
                     {% for log in logs %}
                     <tr>
                         <td>{{ log.username }}</td>
-                        <td>{{ log.action }}</td>
+                        <td>
+                            {% if log.action == 'LOGIN' %}
+                                <span class="log-login">{{ log.action }}</span>
+
+                            {% elif log.action == 'LOGOUT' %}
+                                <span class="log-logout">{{ log.action }}</span>
+
+                            {% elif log.action == 'UPLOAD' %}
+                                <span class="log-upload">{{ log.action }}</span>
+
+                            {% elif log.action == 'SHARE_DOCUMENT' %}
+                                <span class="log-share">SHARE</span>
+
+                            {% elif log.action == 'UNSHARE_DOCUMENT' %}
+                                <span class="log-unshare">USER UNSHARE</span>
+
+                            {% elif log.action == 'GROUP_SHARE' %}
+                                <span class="log-group-share">GROUP SHARE</span>
+
+                            {% elif log.action == 'UNSHARE_GROUP' %}
+                                <span class="log-group-unshare">GROUP UNSHARE</span>
+
+                            {% elif log.action == 'DELETE' %}
+                                <span class="log-delete">{{ log.action }}</span>
+
+                            {% elif log.action == 'DELETE_USER' %}
+                                <span class="log-delete">DELETE USER</span>
+
+                            {% elif log.action == 'DELETE_GROUP' %}
+                                <span class="log-delete">DELETE GROUP</span>
+
+                            {% elif log.action == 'EDIT_USER' %}
+                                <span class="log-edit">EDIT USER</span>
+
+                            {% elif log.action == 'EDIT_GROUP' %}
+                                <span class="log-edit">EDIT GROUP</span>
+
+                            {% elif log.action == 'RESET_PASSWORD' %}
+                                <span class="log-reset">RESET PASSWORD</span>
+
+                            {% elif log.action == 'VISIBILITY_CHANGE' %}
+                                <span class="log-visibility">VISIBILITY</span>
+                            
+                            {% elif log.action == 'CREATE_USER' %}
+                                <span class="log-create-user">CREATE USER</span>
+                            
+                            {% elif log.action == 'CREATE_GROUP' %}
+                                <span class="log-create-group">CREATE GROUP</span>
+
+                            {% else %}
+                                {{ log.action }}
+                            {% endif %}
+                        </td>
                         <td>{{ log.details }}</td>
-                        <td>{{ log.timestamp }}</td>
+                        <td class="text-center">{{ log.timestamp }}</td>
                     </tr>
                     {% endfor %}
                 {% else %}
