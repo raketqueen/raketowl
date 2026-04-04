@@ -194,6 +194,15 @@
             display: inline-block;
             margin-left: 6px;
         }
+
+        /* SECTION HEADERS (DARK MODE ONLY) */
+        body.dark-mode .section-title {
+            color: royalblue;
+            font-weight: Bold;
+            font-size: 25px;
+            font-family: 'Orbitron',sans-serif;
+            text-shadow: 0 0 4px royalblue;
+        }
     </style>
 </head>
 
@@ -228,7 +237,7 @@
     	<div class="d-flex justify-content-center">
             <div>
 
-                <h4 class="text-start">Create User</h4>
+                <h4 class="text-start section-title">Create User</h4>
 
                 <form action="/admin/create_user" method="POST" class="d-flex gap-2 align-items-center flex-nowrap">
 
@@ -279,7 +288,7 @@
     	<div class="d-flex justify-content-center">
             <div>
 
-                <h4 class="text-start">Create Group</h4>
+                <h4 class="text-start section-title">Create Group</h4>
 
                 <form action="/admin/create_group" method="POST" class="d-flex gap-2 align-items-center flex-nowrap">
 
@@ -302,7 +311,7 @@
 
     	<div class="mx-auto w-100" style="max-width: 700px;">
 
-            <h4 class="mb-3 ps-1">Group List</h4>
+            <h4 class="mb-3 ps-1 section-title">Group List</h4>
                     
             <table class="table table-dark-custom table-hover group-table">
 
@@ -352,7 +361,7 @@
         
         <div class="mx-auto w-100" style="max-width: auto">
 
-            <h4 class="mb-3 ps-1">User List</h4>
+            <h4 class="mb-3 ps-1 section-title">User List</h4>
             
             <table class="table table-dark-custom table-hover">
 
