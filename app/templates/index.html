@@ -309,153 +309,154 @@
 
 			<td>
 
-    			<!-- EXISTING USER SHARES -->
-    			{% if shared_map.get(doc.id) %}
-        			{% for s in shared_map.get(doc.id) %}
-            			<div class="d-flex align-items-center mb-1">
+    			<div class="d-flex flex-column gap-1">
 
-                			<span class="badge bg-info text-dark me-1">
-                    			{{ s.display }}
-                			</span>
+					<!-- EXISTING USER SHARES -->
+					{% if shared_map.get(doc.id) %}
+						{% for s in shared_map.get(doc.id) %}
+							<div class="d-flex justify-content-between align-items-center">
 
-                			{% if session.get('user_id') == doc.owner_id %}
-                			<form action="/unshare/{{ doc.id }}" method="POST" style="display:inline;">
-                    			<input type="hidden" name="user_id" value="{{ s.user_id }}">
+								<span class="badge bg-info text-dark">
+									{{ s.display }}
+								</span>
 
-                    			<button type="submit"
-                            			class="btn btn-sm btn-danger"
-                            			onclick="return confirm('Remove access for this user?');">
-                        			✖
-                    			</button>
-                			</form>
-                			{% endif %}
+								{% if session.get('user_id') == doc.owner_id %}
+								<form action="/unshare/{{ doc.id }}" method="POST" class="m-0">
+									<input type="hidden" name="user_id" value="{{ s.user_id }}">
+									<button type="submit"
+											class="btn btn-sm btn-danger px-2 py-0"
+											onclick="return confirm('Remove access for this user?');">
+										✖
+									</button>
+								</form>
+								{% endif %}
 
-            			</div>
-        			{% endfor %}
-    			{% else %}
-        			<span class="text-muted">-</span>
-    			{% endif %}
+							</div>
+						{% endfor %}
+					{% else %}
+						<span class="text-muted">-</span>
+					{% endif %}
 
-    			<!-- 🔥 MOVED USER SHARE FORM HERE -->
-    			{% if session.get('user_id') == doc.owner_id %}
-    			<form action="/share/{{ doc.id }}" method="POST" class="d-flex mt-1">
+					<!-- SHARE FORM -->
+					{% if session.get('user_id') == doc.owner_id %}
+					<form action="/share/{{ doc.id }}" method="POST" class="d-flex gap-1 mt-1">
 
-        			<!-- USER DROPDOWN -->
-        			<select name="user_id" class="form-select form-select-sm me-1" style="max-width: 120px;" required>
-            			<option value="" disabled selected>User</option>
-            			{% for u in all_users %}
-                			{% if u.id != session.get('user_id') %}
-                    			<option value="{{ u.id }}">{{ u.username }}</option>
-                			{% endif %}
-            			{% endfor %}
-        			</select>
+						<select name="user_id" class="form-select form-select-sm" required>
+							<option value="" disabled selected>User</option>
+							{% for u in all_users %}
+								{% if u.id != session.get('user_id') %}
+									<option value="{{ u.id }}">{{ u.username }}</option>
+								{% endif %}
+							{% endfor %}
+						</select>
 
-        			<!-- PERMISSION -->
-        			<select name="permission" class="form-select form-select-sm me-1" style="max-width: 90px;">
-            			<option value="view">View</option>
-            			<option value="edit">Edit</option>
-        			</select>
+						<select name="permission" class="form-select form-select-sm">
+							<option value="view">View</option>
+							<option value="edit">Edit</option>
+						</select>
 
-        			<!-- SHARE BUTTON -->
-        			<button type="submit" class="btn btn-sm btn-info">
-            			Share
-        			</button>
+						<button type="submit" class="btn btn-sm btn-info">
+							Share
+						</button>
 
-    			</form>
-    			{% endif %}
+					</form>
+					{% endif %}
 
-			</td>
-
-			<td>
-
-			<!-- EXISTING GROUP SHARES DISPLAY -->
-			{% if group_shared_map.get(doc.id) %}
-    			    {% for g in group_shared_map.get(doc.id) %}
-    			    	<div class="d-flex align-items-center mb-1">
-
-        			    <span class="badge bg-info text-dark me-1">
-            				{{ g.display }}
-        			    </span>
-
-        			    {% if session.get('user_id') == doc.owner_id %}
-        			    <form action="/unshare_group/{{ doc.id }}" method="POST" style="display:inline;">
-            				<input type="hidden" name="group_id" value="{{ g.group_id }}">
-
-            				<button type="submit"
-                    				class="btn btn-sm btn-danger"
-                    				onclick="return confirm('Remove access for this group?');">
-                			    ✖
-            				</button>
-        			    </form>
-        			    {% endif %}
-
-    				</div>
-			    {% endfor %}
-			{% else %}
-    			    <span class="text-muted">-</span>
-			{% endif %}
-
-			<!-- SHARE FORM (OWNER ONLY) -->
-			{% if session.get('user_id') == doc.owner_id %}
-
-			<form action="/share_group/{{ doc.id }}" method="POST" class="d-flex mt-1">
-
-    			    <!-- GROUP DROPDOWN -->
-    			    <select name="group_id" class="form-select form-select-sm me-1" style="max-width: 120px;" required>
-        				<option value="" disabled selected>Group</option>
-        					{% for g in all_groups %}
-            			    	<option value="{{ g.id }}">{{ g.name }}</option>
-        					{% endfor %}
-    			    	</select>
-
-    			    <!-- PERMISSION -->
-    			    <select name="permission" class="form-select form-select-sm me-1" style="max-width: 90px;">
-        				<option value="view">View</option>
-        				<option value="edit">Edit</option>
-    			    </select>
-
-    			    <!-- SHARE BUTTON -->
-    			    <button type="submit" class="btn btn-sm btn-info">
-        				Share
-    			    </button>
-
-			</form>
-
-			{% endif %}
+				</div>
 
 			</td>
 
 			<td>
 
-    			    <!-- DOWNLOAD -->
-    			    <a href="/download/{{ doc.id }}" class="btn btn-sm btn-primary">
-        			Download
-    			    </a>
+				<div class="d-flex flex-column gap-1">
 
-    			    {% if session.get('user_id') == doc.owner_id %}
-			    	
-        			<!-- TOGGLE PUBLIC / PRIVATE -->
-        			<form action="/toggle_visibility/{{ doc.id }}" method="POST" style="display:inline;">
-            			    {% if doc.is_public %}
-                			<button type="submit" class="btn btn-sm btn-warning">
-                    			    Make Private
-                			</button>
-            			    {% else %}
-                			<button type="submit" class="btn btn-sm btn-success">
-                    			    Make Public
-                			</button>
-            			    {% endif %}
-        			</form>
+					<!-- EXISTING GROUP SHARES -->
+					{% if group_shared_map.get(doc.id) %}
+						{% for g in group_shared_map.get(doc.id) %}
+							<div class="d-flex justify-content-between align-items-center">
 
-        			<!-- DELETE -->
-        			<form action="/delete/{{ doc.id }}" method="POST" style="display:inline;">
-            			    <button type="submit" class="btn btn-sm btn-danger"
-                    			    onclick="return confirm('Delete this file?');">
-                			Delete
-            			    </button>
-        			</form>
+								<span class="badge bg-info text-dark">
+									{{ g.display }}
+								</span>
 
-    			    {% endif %}
+								{% if session.get('user_id') == doc.owner_id %}
+								<form action="/unshare_group/{{ doc.id }}" method="POST" class="m-0">
+									<input type="hidden" name="group_id" value="{{ g.group_id }}">
+									<button type="submit"
+											class="btn btn-sm btn-danger px-2 py-0"
+											onclick="return confirm('Remove access for this group?');">
+										✖
+									</button>
+								</form>
+								{% endif %}
+
+							</div>
+						{% endfor %}
+					{% else %}
+						<span class="text-muted">-</span>
+					{% endif %}
+
+					<!-- SHARE FORM -->
+					{% if session.get('user_id') == doc.owner_id %}
+					<form action="/share_group/{{ doc.id }}" method="POST" class="d-flex gap-1 mt-1">
+
+						<select name="group_id" class="form-select form-select-sm" required>
+							<option value="" disabled selected>Group</option>
+							{% for g in all_groups %}
+								<option value="{{ g.id }}">{{ g.name }}</option>
+							{% endfor %}
+						</select>
+
+						<select name="permission" class="form-select form-select-sm">
+							<option value="view">View</option>
+							<option value="edit">Edit</option>
+						</select>
+
+						<button type="submit" class="btn btn-sm btn-info">
+							Share
+						</button>
+
+					</form>
+					{% endif %}
+
+				</div>
+
+			</td>
+
+			<td class="text-center">
+    			<div class="d-flex justify-content-center align-items-center gap-2 flex-nowrap">
+
+				<!-- DOWNLOAD -->
+				<a href="/download/{{ doc.id }}" class="btn btn-sm btn-primary">
+				Download
+				</a>
+
+				{% if session.get('user_id') == doc.owner_id %}
+				
+				<!-- TOGGLE PUBLIC / PRIVATE -->
+				<form action="/toggle_visibility/{{ doc.id }}" method="POST" class="m-0">
+						{% if doc.is_public %}
+						<button type="submit" class="btn btn-sm btn-warning text-nowrap">
+								Private
+						</button>
+						{% else %}
+						<button type="submit" class="btn btn-sm btn-success text-nowrap">
+								Public
+						</button>
+						{% endif %}
+				</form>
+
+				<!-- DELETE -->
+				<form action="/delete/{{ doc.id }}" method="POST" class="m-0">
+						<button type="submit" class="btn btn-sm btn-danger"
+								onclick="return confirm('Delete this file?');">
+						Delete
+						</button>
+				</form>
+
+				{% endif %}
+
+				</div>
 
 			</td>
         	    </tr>

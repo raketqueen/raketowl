@@ -16,6 +16,7 @@ A Dockerized document management system built with:
 - Private & public document visibility
 - Private document collaboration via user or group (Enforce Permission)
 - User and Group management UI
+- Version control system
 - Activity logging (with sorting and color code feature)
 - Dark / Light theme UI accross pages
 
@@ -25,7 +26,7 @@ A Dockerized document management system built with:
 
 - User View/Edit permission (POC testing)
 - Group View/Edit permission (POC testing)
-- UI alignment and polishing (refinement)
+- UI alignment and column polishing
 
 ---
 
@@ -50,6 +51,17 @@ raketowl/
 |-------README.md
 |-------.gitignore
 ```
+
+---
+
+## 🛠️ Future Improvements
+
+- Hold Document Feature (Check-in/Check-out Capability)
+- User level password reset
+- Hierarchical Structure
+- Attribute assignment (adding metadata to the file uploaded)
+
+---
 
 ## 🔩 Requirements
 - Docker
