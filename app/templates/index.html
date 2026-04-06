@@ -197,23 +197,23 @@
 
 <body>
 
-<div class="container">
+<div class="container-fluid px-4">
 
     <!-- HEADER -->
     <h1 class="main-title">Raket Owl Filing Cabinet</h1>
     	{% if error == 'invalid' %}
-    	<div class="alert alert-danger text-center mt-3">
-    	    Invalid username or password
-    	</div>
+			<div class="alert alert-danger text-center mt-3">
+				Invalid username or password
+			</div>
     	{% endif %}
 
 	{% with messages = get_flashed_messages(with_categories=true) %}
     	    {% if messages %}
-        	{% for category, message in messages %}
+        		{% for category, message in messages %}
             	    <div class="alert alert-{{ category }} text-center mt-2">
                 	{{ message }}
             	    </div>
-       		{% endfor %}
+       			{% endfor %}
     	    {% endif %}
 	{% endwith %}
 
@@ -222,9 +222,9 @@
 
     	    <!-- Login Button -->
     	    {% if not session.get('user_id') %}
-        	<button class="btn btn-primary btn-custom" data-bs-toggle="modal" data-bs-target="#loginModal">
-            	    Login
-        	</button>
+				<button class="btn btn-primary btn-custom" data-bs-toggle="modal" data-bs-target="#loginModal">
+						Login
+				</button>
     	    {% else %}
         	<span class="welcome-user">Welcome, {{ session['username'] }}</span>
         	<a href="/logout" class="btn btn-danger btn-custom">Logout</a>
@@ -278,12 +278,13 @@
     </div>
 
     <!-- PUBLIC DOCUMENTS TABLE -->
-    <div class="mt-4">
-        <table class="table table-dark-custom table-hover">
+    <div class="mt-4 w-100">
+        <table class="table table-dark-custom table-hover w-100">
             <thead>
                 <tr>
                     <th>File Name</th>
-                    <th>Owner</th>
+                    <th class="text-center">Date</th>
+					<th>Owner</th>
                     <th>Version</th>
                     <th>Status</th>
                     <th class="text-center">User Share</th>
@@ -296,7 +297,8 @@
         	    {% for doc in documents %}
         	    <tr>
             		<td>{{ doc.filename }}</td>
-            		<td>{{ doc.username }}</td>
+            		<td class="text-center">{{ doc.updated_at }}</td>
+					<td>{{ doc.username }}</td>
             		<td class="text-center">{{ doc.version }}</td>
 
 			<td>
@@ -463,7 +465,7 @@
         	    {% endfor %}
     		{% else %}
         	    <tr>
-            		<td colspan="7" class="center">No documents available</td>
+            		<td colspan="8" class="center">No documents available</td>
         	    </tr>
     		{% endif %}
 	    </tbody>

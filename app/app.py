@@ -1,3 +1,4 @@
+# pylint: disable=too-many-lines
 import time
 import os
 from flask import Flask, render_template, request, redirect, session, url_for, send_file, flash
@@ -13,7 +14,7 @@ DOCUMENTS_PATH = '/documents'
 app.config['DOCUMENTS_PATH'] = DOCUMENTS_PATH
 
 if not os.path.exists(DOCUMENTS_PATH):
-    raise Exception("❌ Documents volume not mounted! Check docker-compose.")
+    raise RuntimeError("❌ Documents volume not mounted! Check docker-compose.")
 
 # =========================
 # DATABASE CONNECTION
@@ -21,6 +22,7 @@ if not os.path.exists(DOCUMENTS_PATH):
 
 
 def get_db_connection():
+    """Establishes a connection to the MySQL database with retries."""
     for i in range(20):  # 20 retries
         try:
             return mysql.connector.connect(
@@ -29,11 +31,18 @@ def get_db_connection():
                 password='ThunderKats1973',
                 database='raketowl'
             )
-        except mysql.connector.Error:
-            print(f"DB not ready... retry {i+1}/20")
+        except mysql.connector.Error as err:
+            # Specific MySQL error logging
+            print(f"⚠️ DB not ready (Attempt {i+1}/20): {err}")
             time.sleep(3)
+        except Exception as e:
+            # Catching unexpected non-MySQL errors
+            print(f"❌ Unexpected error during connection: {e}")
+            raise
 
-    raise Exception("Database not ready after retries")
+    # Final failure after all retries
+    raise RuntimeError(
+        "Database connection failed after 20 attempts. Check if 'db' container is running.")
 
 # =========================
 # HOME PAGE
@@ -42,12 +51,14 @@ def get_db_connection():
 
 @app.route('/')
 def index():
+    """Handle the main dashboard, document listing, and search functionality."""
     error = request.args.get('error')
     search = request.args.get('search')
 
     try:
         conn = get_db_connection()
-    except Exception:
+    except (mysql.connector.Error, RuntimeError) as err:
+        print(f"Database connection issue: {err}")
         return "System is starting up, please refresh in a few seconds.", 503
 
     cursor = conn.cursor(dictionary=True)
@@ -69,18 +80,21 @@ def index():
         if search:
             cursor.execute(
                 """
-                SELECT DISTINCT
+                SELECT
                     d.id,
                     d.filename,
                     d.version,
                     d.owner_id,
                     d.is_public,
+                    d.updated_at,
                     u.username,
-                    CASE
-                        WHEN ds.shared_with_user_id = %s THEN ds.permission
-                        WHEN dgs.permission IS NOT NULL THEN dgs.permission
-                        ELSE NULL
-                    END AS permission
+                    MAX(
+                        CASE
+                            WHEN ds.shared_with_user_id = %s THEN ds.permission
+                            WHEN dgs.permission IS NOT NULL THEN dgs.permission
+                            ELSE NULL
+                        END
+                    ) AS permission
                 FROM documents d
                 JOIN users u ON d.owner_id = u.id
 
@@ -95,13 +109,19 @@ def index():
                     AND ug.user_id = %s
 
                 WHERE
-                    (
-                        d.owner_id = %s
-                        OR d.is_public = 1
-                        OR ds.shared_with_user_id = %s
-                        OR ug.user_id = %s
-                    )
-                    AND d.filename LIKE %s
+                    d.owner_id = %s
+                    OR d.is_public = 1
+                    OR ds.shared_with_user_id = %s
+                    OR ug.user_id = %s
+
+                GROUP BY
+                    d.id,
+                    d.filename,
+                    d.version,
+                    d.owner_id,
+                    d.is_public,
+                    d.updated_at,
+                    u.username
                 """,
                 (
                     session['user_id'],  # direct share priority
@@ -121,6 +141,7 @@ def index():
                     d.version,
                     d.owner_id,
                     d.is_public,
+                    d.updated_at,
                     u.username,
                     MAX(
                         CASE
@@ -162,7 +183,7 @@ def index():
         # Public view only
         if search:
             cursor.execute(
-                """SELECT documents.id, documents.filename, documents.version, documents.owner_id, documents.is_public, users.username 
+                """SELECT documents.id, documents.filename, documents.version, documents.owner_id, documents.is_public, documents.updated_at, users.username 
                    FROM documents
                    JOIN users ON documents.owner_id = users.id
                    WHERE documents.is_public = 1 AND documents.filename LIKE %s""",
@@ -170,7 +191,7 @@ def index():
             )
         else:
             cursor.execute(
-                """SELECT documents.id, documents.filename, documents.version, documents.owner_id, documents.is_public, users.username 
+                """SELECT documents.id, documents.filename, documents.version, documents.owner_id, documents.is_public, documents.updated_at, users.username 
                    FROM documents
                    JOIN users ON documents.owner_id = users.id
                    WHERE documents.is_public = 1"""
@@ -337,10 +358,17 @@ def unshare_document(doc_id):
         (doc_id, target_user_id)
     )
 
-    # Get username
-    cursor.execute("SELECT username FROM users WHERE id = %s",
-                   (target_user_id,))
-    target_user = cursor.fetchone()[0]
+    # Get username safely
+    cursor.execute(
+        "SELECT username FROM users WHERE id = %s",
+        (target_user_id,)
+    )
+    row = cursor.fetchone()
+
+    if row:
+        target_user = row[0]
+    else:
+        target_user = "Unknown User"
 
     # Log
     cursor.execute(
@@ -456,8 +484,14 @@ def login():
         )
         conn.commit()
 
+        cursor.close()
+        conn.close()
+
         return redirect(url_for('index'))
     else:
+        cursor.close()
+        conn.close()
+
         return redirect(url_for('index', error='invalid'))
 
 # =========================
@@ -1050,7 +1084,7 @@ def admin_users():
 
 @app.route('/admin/create_group', methods=['POST'])
 def create_group():
-
+    """Create a new user group in the groups_master table (Admin only)."""
     # Admin only
     if 'user_id' not in session or session.get('role') != 'admin':
         return "Unauthorized", 403
@@ -1081,8 +1115,9 @@ def create_group():
         )
         conn.commit()
 
-    except Exception as e:
-        flash("Error: Group may already exist", "warning")
+    except mysql.connector.Error as e:
+        print(f"Database Error: {e}")  # This uses 'e' so the error goes away!
+        flash("Error: Group may already exist or database is busy.", "warning")
 
     cursor.close()
     conn.close()
