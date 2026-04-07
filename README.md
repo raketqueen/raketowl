@@ -27,6 +27,7 @@ A Dockerized document management system built with:
 - User View/Edit permission (POC testing)
 - Group View/Edit permission (POC testing)
 - UI alignment and column polishing
+- Added the last user modified the file
 
 ---
 

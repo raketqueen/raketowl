@@ -283,13 +283,16 @@
             <thead>
                 <tr>
                     <th>File Name</th>
-                    <th class="text-center">Date</th>
 					<th>Owner</th>
-                    <th class="text-center">Version</th>
-                    <th>Status</th>
-                    <th class="text-center">User Share</th>
-                    <th class="text-center">Group Share</th>
-                    <th class="text-center">Action</th>
+					<th class="text-center">Version</th>
+					<th>Last Modified By</th>
+					<th class="text-center">Date</th>
+					<th>Status</th>
+					{% if session.get('user_id') %}
+						<th class="text-center">User Share</th>
+						<th class="text-center">Group Share</th>
+					{% endif %}
+					<th class="text-center">Action</th>
                 </tr>
             </thead>
 	    <tbody>
@@ -297,18 +300,20 @@
         	    {% for doc in documents %}
         	    <tr>
             		<td>{{ doc.filename }}</td>
-            		<td class="text-center">{{ doc.updated_at }}</td>
 					<td>{{ doc.username }}</td>
-            		<td class="text-center">{{ doc.version }}</td>
+					<td class="text-center">{{ doc.version }}</td>
+					<td>{{ doc.last_editor if doc.last_editor else 'Original' }}</td>
+					<td class="text-center">{{ doc.updated_at }}</td>
 
-			<td>
-    			    {% if doc.is_public %}
-        		    	<span class="badge bg-warning text-dark me-1">Public</span>
-    			    {% else %}
-        				<span class="badge bg-success">Private</span>
-    			    {% endif %}
-			</td>
+					<td>
+							{% if doc.is_public %}
+								<span class="badge bg-warning text-dark me-1">Public</span>
+							{% else %}
+								<span class="badge bg-success">Private</span>
+							{% endif %}
+					</td>
 
+			{% if session.get('user_id') %}
 			<td>
 
     			<div class="d-flex flex-column gap-1">
@@ -424,6 +429,7 @@
 				</div>
 
 			</td>
+			{% endif %}
 
 			<td class="text-center">
     			<div class="d-flex justify-content-center align-items-center gap-2 flex-nowrap">
@@ -465,7 +471,9 @@
         	    {% endfor %}
     		{% else %}
         	    <tr>
-            		<td colspan="8" class="center">No documents available</td>
+            		<td colspan="{{ 9 if session.get('user_id') else 7 }}" class="center">
+						No documents available
+					</td>
         	    </tr>
     		{% endif %}
 	    </tbody>

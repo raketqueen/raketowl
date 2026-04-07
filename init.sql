@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS documents (
     filename VARCHAR(255) NOT NULL,
     filepath VARCHAR(255) NOT NULL,
     owner_id INT NOT NULL,
+    last_modified_by INT,
     is_public BOOLEAN DEFAULT FALSE,
     version INT DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -112,3 +113,4 @@ CREATE TABLE IF NOT EXISTS activity_logs (
 
 
 SET FOREIGN_KEY_CHECKS=1;
+ALTER TABLE documents ADD CONSTRAINT fk_last_modifier FOREIGN KEY (last_modified_by) REFERENCES users(id) ON SET NULL;

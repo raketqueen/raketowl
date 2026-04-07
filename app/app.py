@@ -88,6 +88,68 @@ def index():
                     d.is_public,
                     d.updated_at,
                     u.username,
+                    (SELECT username FROM activity_logs 
+                     WHERE action = 'UPLOAD' AND details LIKE CONCAT('%%', d.filename, '%%') 
+                     ORDER BY id DESC LIMIT 1) AS last_editor,
+                    MAX(
+                        CASE
+                            WHEN ds.shared_with_user_id = %s THEN ds.permission
+                            WHEN dgs.permission IS NOT NULL THEN dgs.permission
+                            ELSE NULL
+                        END
+                    ) AS permission
+                FROM documents d
+                JOIN users u ON d.owner_id = u.id
+
+                LEFT JOIN document_shares ds
+                    ON d.id = ds.document_id
+
+                LEFT JOIN document_group_shares dgs
+                    ON d.id = dgs.document_id
+
+                LEFT JOIN user_groups ug
+                    ON ug.group_id = dgs.group_id
+                    AND ug.user_id = %s
+
+                WHERE
+                    (d.owner_id = %s
+                    OR d.is_public = 1
+                    OR ds.shared_with_user_id = %s
+                    OR ug.user_id = %s)
+                    AND d.filename LIKE %s
+
+                GROUP BY
+                    d.id,
+                    d.filename,
+                    d.version,
+                    d.owner_id,
+                    d.is_public,
+                    d.updated_at,
+                    u.username
+                """,
+                (
+                    session['user_id'],  # direct share priority
+                    session['user_id'],  # group mapping
+                    session['user_id'],  # owner
+                    session['user_id'],  # direct
+                    session['user_id'],  # group
+                    f"%{search}%"
+                )
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT
+                    d.id,
+                    d.filename,
+                    d.version,
+                    d.owner_id,
+                    d.is_public,
+                    d.updated_at,
+                    u.username,
+                    (SELECT username FROM activity_logs 
+                     WHERE action = 'UPLOAD' AND details LIKE CONCAT('%%', d.filename, '%%') 
+                     ORDER BY id DESC LIMIT 1) AS last_editor,
                     MAX(
                         CASE
                             WHEN ds.shared_with_user_id = %s THEN ds.permission
@@ -124,54 +186,6 @@ def index():
                     u.username
                 """,
                 (
-                    session['user_id'],  # direct share priority
-                    session['user_id'],  # group mapping
-                    session['user_id'],  # owner
-                    session['user_id'],  # direct
-                    session['user_id'],  # group
-                    f"%{search}%"
-                )
-            )
-        else:
-            cursor.execute(
-                """
-                SELECT
-                    d.id,
-                    d.filename,
-                    d.version,
-                    d.owner_id,
-                    d.is_public,
-                    d.updated_at,
-                    u.username,
-                    MAX(
-                        CASE
-                            WHEN ds.shared_with_user_id = %s THEN ds.permission
-                            WHEN dgs.permission IS NOT NULL THEN dgs.permission
-                            ELSE NULL
-                        END
-                    ) AS permission
-                FROM documents d
-                JOIN users u ON d.owner_id = u.id
-
-                LEFT JOIN document_shares ds
-                    ON d.id = ds.document_id
-
-                LEFT JOIN document_group_shares dgs
-                    ON d.id = dgs.document_id
-
-                LEFT JOIN user_groups ug
-                    ON ug.group_id = dgs.group_id
-                    AND ug.user_id = %s
-
-                WHERE
-                    d.owner_id = %s
-                    OR d.is_public = 1
-                    OR ds.shared_with_user_id = %s
-                    OR ug.user_id = %s
-
-                GROUP BY d.id
-                """,
-                (
                     session['user_id'],  # CASE (direct share priority)
                     session['user_id'],  # user_groups join
                     session['user_id'],  # owner
@@ -183,7 +197,17 @@ def index():
         # Public view only
         if search:
             cursor.execute(
-                """SELECT documents.id, documents.filename, documents.version, documents.owner_id, documents.is_public, documents.updated_at, users.username 
+                """SELECT 
+                    documents.id, 
+                    documents.filename, 
+                    documents.version, 
+                    documents.owner_id, 
+                    documents.is_public, 
+                    documents.updated_at, 
+                    users.username,
+                    (SELECT username FROM activity_logs 
+                     WHERE action = 'UPLOAD' AND details LIKE CONCAT('%%', documents.filename, '%%') 
+                     ORDER BY id DESC LIMIT 1) AS last_editor
                    FROM documents
                    JOIN users ON documents.owner_id = users.id
                    WHERE documents.is_public = 1 AND documents.filename LIKE %s""",
@@ -191,7 +215,17 @@ def index():
             )
         else:
             cursor.execute(
-                """SELECT documents.id, documents.filename, documents.version, documents.owner_id, documents.is_public, documents.updated_at, users.username 
+                """SELECT 
+                    documents.id, 
+                    documents.filename, 
+                    documents.version, 
+                    documents.owner_id, 
+                    documents.is_public, 
+                    documents.updated_at, 
+                    users.username,
+                    (SELECT username FROM activity_logs 
+                     WHERE action = 'UPLOAD' AND details LIKE CONCAT('%%', documents.filename, '%%') 
+                     ORDER BY id DESC LIMIT 1) AS last_editor
                    FROM documents
                    JOIN users ON documents.owner_id = users.id
                    WHERE documents.is_public = 1"""
