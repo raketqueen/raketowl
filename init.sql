@@ -41,6 +41,12 @@ CREATE TABLE IF NOT EXISTS documents (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
+    is_locked TINYINT(1) DEFAULT 0,
+    locked_by INT DEFAULT NULL,
+    locked_at TIMESTAMP NULL DEFAULT NULL,
+
+    CONSTRAINT fk_last_modifier FOREIGN KEY (last_modified_by) REFERENCES users(id) ON DELETE SET NULL,
+    CONSTRAINT fk_locked_by FOREIGN KEY (locked_by) REFERENCES users(id) ON DELETE SET NULL,
     FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
@@ -113,4 +119,3 @@ CREATE TABLE IF NOT EXISTS activity_logs (
 
 
 SET FOREIGN_KEY_CHECKS=1;
-ALTER TABLE documents ADD CONSTRAINT fk_last_modifier FOREIGN KEY (last_modified_by) REFERENCES users(id) ON SET NULL;

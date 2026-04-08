@@ -192,6 +192,20 @@
     	background-color: #1e1e1e;
     	color: #ffffff;
 	}
+
+	/* Clean and scaled - no hacks */
+	.locker-info {
+		font-size: 0.95rem;
+		font-weight: 800;
+		color: #0dcaf0; /* Bootstrap 'info' cyan - visible on dark/light */
+		letter-spacing: 0.02em;
+	}
+
+	/* Optional: If you want it even brighter in Dark Mode specifically */
+	[data-bs-theme="dark"] .locker-info {
+		color: #76d1e3; 
+		text-shadow: 0 0 5px rgba(13, 202, 240, 0.2);
+	}
     </style>
 </head>
 
@@ -305,12 +319,24 @@
 					<td>{{ doc.last_editor if doc.last_editor else 'Original' }}</td>
 					<td class="text-center">{{ doc.updated_at }}</td>
 
-					<td>
-							{% if doc.is_public %}
-								<span class="badge bg-warning text-dark me-1">Public</span>
+					<td class="text-center align-middle">
+						<div class="d-flex flex-column gap-1">
+							{% if doc.is_locked %}
+								<span class="badge bg-danger">🔒 Locked</span>
+								
+								{# Step 2: Display the name we just added to the SQL #}
+								{% if doc.locker_name %}
+									<small class="locker-info">
+										by {{ doc.locker_name }}
+									</small>
+								{% endif %}
+
+							{% elif doc.is_public %}
+								<span class="badge bg-warning text-dark">Public</span>
 							{% else %}
 								<span class="badge bg-success">Private</span>
 							{% endif %}
+						</div>
 					</td>
 
 			{% if session.get('user_id') %}
@@ -431,41 +457,60 @@
 			</td>
 			{% endif %}
 
-			<td class="text-center">
-    			<div class="d-flex justify-content-center align-items-center gap-2 flex-nowrap">
+			<!-- ACTION COLUMN -->
+			<td class="text-nowrap align-middle">
 
 				<!-- DOWNLOAD -->
-				<a href="/download/{{ doc.id }}" class="btn btn-sm btn-primary">
-				Download
-				</a>
+				<div class="d-flex gap-1 justify-content-center">
+					<a href="/download/{{ doc.id }}" class="btn btn-sm btn-primary">Download</a>
 
-				{% if session.get('user_id') == doc.owner_id %}
-				
-				<!-- TOGGLE PUBLIC / PRIVATE -->
-				<form action="/toggle_visibility/{{ doc.id }}" method="POST" class="m-0">
-						{% if doc.is_public %}
-						<button type="submit" class="btn btn-sm btn-warning text-nowrap">
-								Private
-						</button>
+					{# ONLY show Lock/Unlock if the user is logged in #}
+        			{% if session.get('user_id') %}
+
+						<!-- FILE LOCK UNLOCK -->
+						{% if doc.is_locked %}
+							{# UNLOCK: Only show to locker, owner, or admin #}
+							{% if session.get('user_id') == doc.locked_by or session.get('user_id') == doc.owner_id or session.get('role') == 'admin' %}
+								<form action="/unlock/{{ doc.id }}" method="POST" class="m-0">
+									<button type="submit" class="btn btn-sm btn-warning">Unlock</button>
+								</form>
+							{% else %}
+								{# Other users just see the status in the other column, no button here #}
+							{% endif %}
 						{% else %}
-						<button type="submit" class="btn btn-sm btn-success text-nowrap">
-								Public
-						</button>
+							{# If NOT locked, anyone with access can Lock #}
+							<form action="/lock/{{ doc.id }}" method="POST" class="m-0">
+								<button type="submit" class="btn btn-sm btn-outline-secondary">Lock</button>
+							</form>
 						{% endif %}
-				</form>
+						
+						<!-- TOGGLE PUBLIC / PRIVATE -->
+						{# OWNER CONTROLS: Hidden if file is locked #}
+						{% if session.get('user_id') == doc.owner_id and not doc.is_locked %}
+							<form action="/toggle_visibility/{{ doc.id }}" method="POST" class="m-0">
+								{% if doc.is_public %}
+									{# If currently public, show button to make it Private (Warning/Orange) #}
+									<button type="submit" class="btn btn-sm btn-warning text-nowrap">
+										Make Private
+									</button>
+								{% else %}
+									{# If currently private, show button to make it Public (Success/Green) #}
+									<button type="submit" class="btn btn-sm btn-success text-nowrap">
+										Make Public
+									</button>
+								{% endif %}
+							</form>
 
-				<!-- DELETE -->
-				<form action="/delete/{{ doc.id }}" method="POST" class="m-0">
-						<button type="submit" class="btn btn-sm btn-danger"
-								onclick="return confirm('Delete this file?');">
-						Delete
-						</button>
-				</form>
-
-				{% endif %}
-
+							<!-- DELETE -->
+							<form action="/delete/{{ doc.id }}" method="POST" class="m-0">
+								<button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure?');">
+									Delete
+								</button>
+							</form>
+						{% endif %}
+					
+					{% endif %}
 				</div>
-
 			</td>
         	    </tr>
         	    {% endfor %}

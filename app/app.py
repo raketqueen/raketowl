@@ -51,7 +51,7 @@ def get_db_connection():
 
 @app.route('/')
 def index():
-    """Handle the main dashboard, document listing, and search functionality."""
+    """Handle the main dashboard, document listing, search, and lock status."""
     error = request.args.get('error')
     search = request.args.get('search')
 
@@ -62,191 +62,75 @@ def index():
         return "System is starting up, please refresh in a few seconds.", 503
 
     cursor = conn.cursor(dictionary=True)
+    all_users = []
+    all_groups = []
+    user_id = session.get('user_id')
 
-    all_users = []  # Initialize in case user not logged in
-    all_groups = []  # NEW: groups list for UI
-
-    if 'user_id' in session:
-        # Fetch all users except the current user for the share dropdown
+    if user_id:
+        # Fetch metadata for UI dropdowns
         cursor.execute(
-            "SELECT id, username FROM users WHERE id != %s", (session['user_id'],))
+            "SELECT id, username FROM users WHERE id != %s", (user_id,))
         all_users = cursor.fetchall()
-
-        # NEW: Fetch all groups for group sharing dropdown
         cursor.execute("SELECT id, name FROM groups_master")
         all_groups = cursor.fetchall()
 
-        # Logged in user: fetch documents
+        # FETCH DOCUMENTS (Logged In) - Added d.is_locked, d.locked_by
+        query = """
+            SELECT
+                d.id, d.filename, d.version, d.owner_id, d.is_public, d.updated_at,
+                d.is_locked, d.locked_by, u.username,
+                (SELECT username FROM users WHERE id = d.locked_by) AS locker_name,
+                (SELECT username FROM activity_logs 
+                 WHERE action = 'UPLOAD' AND details LIKE CONCAT('%%', d.filename, '%%') 
+                 ORDER BY id DESC LIMIT 1) AS last_editor,
+                MAX(CASE
+                    WHEN ds.shared_with_user_id = %s THEN ds.permission
+                    WHEN dgs.permission IS NOT NULL THEN dgs.permission
+                    ELSE NULL
+                END) AS permission
+            FROM documents d
+            JOIN users u ON d.owner_id = u.id
+            LEFT JOIN document_shares ds ON d.id = ds.document_id
+            LEFT JOIN document_group_shares dgs ON d.id = dgs.document_id
+            LEFT JOIN user_groups ug ON ug.group_id = dgs.group_id AND ug.user_id = %s
+            WHERE (d.owner_id = %s OR d.is_public = 1 OR ds.shared_with_user_id = %s OR ug.user_id = %s)
+        """
+        params = [user_id, user_id, user_id, user_id, user_id]
         if search:
-            cursor.execute(
-                """
-                SELECT
-                    d.id,
-                    d.filename,
-                    d.version,
-                    d.owner_id,
-                    d.is_public,
-                    d.updated_at,
-                    u.username,
-                    (SELECT username FROM activity_logs 
-                     WHERE action = 'UPLOAD' AND details LIKE CONCAT('%%', d.filename, '%%') 
-                     ORDER BY id DESC LIMIT 1) AS last_editor,
-                    MAX(
-                        CASE
-                            WHEN ds.shared_with_user_id = %s THEN ds.permission
-                            WHEN dgs.permission IS NOT NULL THEN dgs.permission
-                            ELSE NULL
-                        END
-                    ) AS permission
-                FROM documents d
-                JOIN users u ON d.owner_id = u.id
-
-                LEFT JOIN document_shares ds
-                    ON d.id = ds.document_id
-
-                LEFT JOIN document_group_shares dgs
-                    ON d.id = dgs.document_id
-
-                LEFT JOIN user_groups ug
-                    ON ug.group_id = dgs.group_id
-                    AND ug.user_id = %s
-
-                WHERE
-                    (d.owner_id = %s
-                    OR d.is_public = 1
-                    OR ds.shared_with_user_id = %s
-                    OR ug.user_id = %s)
-                    AND d.filename LIKE %s
-
-                GROUP BY
-                    d.id,
-                    d.filename,
-                    d.version,
-                    d.owner_id,
-                    d.is_public,
-                    d.updated_at,
-                    u.username
-                """,
-                (
-                    session['user_id'],  # direct share priority
-                    session['user_id'],  # group mapping
-                    session['user_id'],  # owner
-                    session['user_id'],  # direct
-                    session['user_id'],  # group
-                    f"%{search}%"
-                )
-            )
-        else:
-            cursor.execute(
-                """
-                SELECT
-                    d.id,
-                    d.filename,
-                    d.version,
-                    d.owner_id,
-                    d.is_public,
-                    d.updated_at,
-                    u.username,
-                    (SELECT username FROM activity_logs 
-                     WHERE action = 'UPLOAD' AND details LIKE CONCAT('%%', d.filename, '%%') 
-                     ORDER BY id DESC LIMIT 1) AS last_editor,
-                    MAX(
-                        CASE
-                            WHEN ds.shared_with_user_id = %s THEN ds.permission
-                            WHEN dgs.permission IS NOT NULL THEN dgs.permission
-                            ELSE NULL
-                        END
-                    ) AS permission
-                FROM documents d
-                JOIN users u ON d.owner_id = u.id
-
-                LEFT JOIN document_shares ds
-                    ON d.id = ds.document_id
-
-                LEFT JOIN document_group_shares dgs
-                    ON d.id = dgs.document_id
-
-                LEFT JOIN user_groups ug
-                    ON ug.group_id = dgs.group_id
-                    AND ug.user_id = %s
-
-                WHERE
-                    d.owner_id = %s
-                    OR d.is_public = 1
-                    OR ds.shared_with_user_id = %s
-                    OR ug.user_id = %s
-
-                GROUP BY
-                    d.id,
-                    d.filename,
-                    d.version,
-                    d.owner_id,
-                    d.is_public,
-                    d.updated_at,
-                    u.username
-                """,
-                (
-                    session['user_id'],  # CASE (direct share priority)
-                    session['user_id'],  # user_groups join
-                    session['user_id'],  # owner
-                    session['user_id'],  # direct share
-                    session['user_id']   # group access
-                )
-            )
+            query += " AND d.filename LIKE %s"
+            params.append(f"%{search}%")
+        query += " GROUP BY d.id"
+        cursor.execute(query, tuple(params))
     else:
-        # Public view only
+        # FETCH DOCUMENTS (Public View) - Added d.is_locked, d.locked_by
+        query = """
+            SELECT 
+                d.id, d.filename, d.version, d.owner_id, d.is_public, d.updated_at, 
+                d.is_locked, d.locked_by, u.username,
+                (SELECT username FROM activity_logs 
+                 WHERE action = 'UPLOAD' AND details LIKE CONCAT('%%', d.filename, '%%') 
+                 ORDER BY id DESC LIMIT 1) AS last_editor
+            FROM documents d
+            JOIN users u ON d.owner_id = u.id
+            WHERE d.is_public = 1
+        """
+        params = []
         if search:
-            cursor.execute(
-                """SELECT 
-                    documents.id, 
-                    documents.filename, 
-                    documents.version, 
-                    documents.owner_id, 
-                    documents.is_public, 
-                    documents.updated_at, 
-                    users.username,
-                    (SELECT username FROM activity_logs 
-                     WHERE action = 'UPLOAD' AND details LIKE CONCAT('%%', documents.filename, '%%') 
-                     ORDER BY id DESC LIMIT 1) AS last_editor
-                   FROM documents
-                   JOIN users ON documents.owner_id = users.id
-                   WHERE documents.is_public = 1 AND documents.filename LIKE %s""",
-                (f"%{search}%",)
-            )
-        else:
-            cursor.execute(
-                """SELECT 
-                    documents.id, 
-                    documents.filename, 
-                    documents.version, 
-                    documents.owner_id, 
-                    documents.is_public, 
-                    documents.updated_at, 
-                    users.username,
-                    (SELECT username FROM activity_logs 
-                     WHERE action = 'UPLOAD' AND details LIKE CONCAT('%%', documents.filename, '%%') 
-                     ORDER BY id DESC LIMIT 1) AS last_editor
-                   FROM documents
-                   JOIN users ON documents.owner_id = users.id
-                   WHERE documents.is_public = 1"""
-            )
+            query += " AND d.filename LIKE %s"
+            params.append(f"%{search}%")
+        cursor.execute(query, tuple(params))
 
     documents = cursor.fetchall()
 
     # =========================
     # RESOLVE FINAL PERMISSION
     # =========================
-    if 'user_id' in session:
-
+    if user_id:
         for doc in documents:
-
-            # OWNER always full access
-            if doc['owner_id'] == session.get('user_id'):
+            if doc['owner_id'] == user_id:
                 doc['final_permission'] = 'owner'
                 continue
-
             perm = doc.get('permission')
-
             if perm:
                 doc['final_permission'] = perm
             elif doc['is_public']:
@@ -255,79 +139,36 @@ def index():
                 doc['final_permission'] = None
 
     # =========================
-    # FETCH SHARING INFO
+    # FETCH SHARING INFO (Maps)
     # =========================
-
     shared_map = {}
-    group_shared_map = {}  # NEW
+    group_shared_map = {}
 
-    if 'user_id' in session:
-
-        conn2 = get_db_connection()
-        cursor2 = conn2.cursor(dictionary=True)
-
-        # =========================
-        # USER SHARES
-        # =========================
-        cursor2.execute("""
-            SELECT 
-                ds.document_id,
-                ds.shared_with_user_id,
-                u.username,
-                ds.permission
+    if user_id:
+        # Re-using cursor for efficiency
+        cursor.execute("""
+            SELECT ds.document_id, ds.shared_with_user_id, u.username, ds.permission
             FROM document_shares ds
             JOIN users u ON ds.shared_with_user_id = u.id
-            WHERE ds.document_id IN (
-                SELECT id FROM documents WHERE owner_id = %s
-            )
-        """, (session['user_id'],))
-
-        shares = cursor2.fetchall()
-
-        for s in shares:
+            WHERE ds.document_id IN (SELECT id FROM documents WHERE owner_id = %s)
+        """, (user_id,))
+        for s in cursor.fetchall():
             doc_id = s['document_id']
             entry = {
-                "display": f"{s['username']} ({s['permission']})",
-                "user_id": s['shared_with_user_id']
-            }
+                "display": f"{s['username']} ({s['permission']})", "user_id": s['shared_with_user_id']}
+            shared_map.setdefault(doc_id, []).append(entry)
 
-            if doc_id not in shared_map:
-                shared_map[doc_id] = []
-
-            shared_map[doc_id].append(entry)
-
-        # =========================
-        # GROUP SHARES (NEW)
-        # =========================
-        cursor2.execute("""
-            SELECT 
-                dgs.document_id,
-                g.name AS group_name,
-                dgs.permission,
-                g.id AS group_id
+        cursor.execute("""
+            SELECT dgs.document_id, g.name AS group_name, dgs.permission, g.id AS group_id
             FROM document_group_shares dgs
             JOIN groups_master g ON dgs.group_id = g.id
-            WHERE dgs.document_id IN (
-                SELECT id FROM documents WHERE owner_id = %s
-            )
-        """, (session['user_id'],))
-
-        group_shares = cursor2.fetchall()
-
-        for g in group_shares:
+            WHERE dgs.document_id IN (SELECT id FROM documents WHERE owner_id = %s)
+        """, (user_id,))
+        for g in cursor.fetchall():
             doc_id = g['document_id']
             entry = {
-                "display": f"{g['group_name']} ({g['permission']})",
-                "group_id": g['group_id']
-            }
-
-            if doc_id not in group_shared_map:
-                group_shared_map[doc_id] = []
-
-            group_shared_map[doc_id].append(entry)
-
-        cursor2.close()
-        conn2.close()
+                "display": f"{g['group_name']} ({g['permission']})", "group_id": g['group_id']}
+            group_shared_map.setdefault(doc_id, []).append(entry)
 
     cursor.close()
     conn.close()
@@ -339,7 +180,8 @@ def index():
         shared_map=shared_map,
         group_shared_map=group_shared_map,
         all_users=all_users,
-        all_groups=all_groups
+        all_groups=all_groups,
+        search=search
     )
 
 # =========================
@@ -576,11 +418,11 @@ def upload():
     cursor = conn.cursor(dictionary=True)
 
     # =========================
-    # STEP 1: CHECK IF DOCUMENT EXISTS (BY FILENAME)
+    # STEP 1: CHECK IF DOCUMENT EXISTS & LOCK STATUS
     # =========================
     cursor.execute(
         """
-        SELECT id, owner_id, version
+        SELECT id, owner_id, version, is_locked, locked_by
         FROM documents
         WHERE filename = %s
         """,
@@ -589,6 +431,14 @@ def upload():
     doc = cursor.fetchone()
 
     if doc:
+        # STRICT SAFETY: You MUST have the lock to upload a new version
+        if not doc['is_locked'] or doc['locked_by'] != session['user_id']:
+            cursor.close()
+            conn.close()
+            flash(
+                "Safety Block: You must LOCK the file before you can upload a new version.", "warning")
+            return redirect(url_for('index'))
+
         doc_id = doc['id']
         owner_id = doc['owner_id']
         current_version = doc['version']
@@ -701,16 +551,18 @@ def download(doc_id):
     cursor = conn.cursor(dictionary=True)
 
     cursor.execute(
-        "SELECT filename, filepath, owner_id, is_public FROM documents WHERE id = %s",
+        "SELECT filename, filepath, owner_id, is_public, is_locked, locked_by FROM documents WHERE id = %s",
         (doc_id,)
     )
     doc = cursor.fetchone()
 
-    cursor.close()
-    conn.close()
-
-    if not doc:
-        return "File not found", 404
+    # NEW LOCK GUARD: Prevent download if locked by someone else
+    if doc and doc['is_locked']:
+        if 'user_id' not in session or (session['user_id'] != doc['locked_by'] and session['user_id'] != doc['owner_id']):
+            cursor.close()
+            conn.close()
+            flash("This file is locked and cannot be downloaded at this time.", "warning")
+            return redirect(url_for('index'))
 
     # =========================
     # ACCESS CONTROL (FINAL PERMISSION)
@@ -798,6 +650,15 @@ def delete_document(doc_id):
         conn.close()
         return "Unauthorized", 403
 
+    # NEW LOCK GUARD: Prevent deletion if file is locked
+    cursor.execute("SELECT is_locked FROM documents WHERE id = %s", (doc_id,))
+    lock_status = cursor.fetchone()
+    if lock_status and lock_status['is_locked']:
+        cursor.close()
+        conn.close()
+        flash("Cannot delete a locked file. Please unlock it first.", "danger")
+        return redirect(url_for('index'))
+
     # Delete file from storage
     if os.path.exists(doc['filepath']):
         os.remove(doc['filepath'])
@@ -848,6 +709,14 @@ def toggle_visibility(doc_id):
         cursor.close()
         conn.close()
         return "Unauthorized", 403
+
+    # NEW LOCK GUARD
+    cursor.execute("SELECT is_locked FROM documents WHERE id = %s", (doc_id,))
+    if cursor.fetchone()['is_locked']:
+        cursor.close()
+        conn.close()
+        flash("Cannot change visibility while the file is locked.", "warning")
+        return redirect(url_for('index'))
 
     # Toggle value
     new_status = 0 if doc['is_public'] else 1
@@ -1525,6 +1394,98 @@ def admin_logs():
         current_sort=sort,
         current_order=order.lower()
     )
+
+# =========================
+# Lock Document
+# =========================
+
+
+@app.route('/lock/<int:doc_id>', methods=['POST'])
+def lock_document(doc_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    conn = get_db_connection()
+    # Use dictionary=True so we can access doc['filename']
+    cursor = conn.cursor(dictionary=True)
+
+    # 1. Get filename for logging
+    cursor.execute("SELECT filename FROM documents WHERE id = %s", (doc_id,))
+    doc = cursor.fetchone()
+
+    if doc:
+        # 2. Only lock if it's not already locked
+        cursor.execute(
+            "UPDATE documents SET is_locked = 1, locked_by = %s WHERE id = %s AND is_locked = 0",
+            (session['user_id'], doc_id)
+        )
+
+        # 3. Insert Log
+        cursor.execute(
+            "INSERT INTO activity_logs (username, action, details) VALUES (%s, %s, %s)",
+            (session['username'], 'LOCK', f"Locked file: {doc['filename']}")
+        )
+        conn.commit()
+
+    cursor.close()
+    conn.close()
+    return redirect(url_for('index'))
+
+# =========================
+# Unlock Document
+# =========================
+
+
+@app.route('/unlock/<int:doc_id>', methods=['POST'])
+def unlock_document(doc_id):
+    """
+    Unlocks a document, making it available for editing again.
+    Accessible by the locker, the owner, or an administrator.
+    """
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
+    user_role = session.get('role')
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    cursor.execute(
+        "SELECT owner_id, locked_by, filename FROM documents WHERE id = %s", (doc_id,))
+    doc = cursor.fetchone()
+
+    if not doc:
+        cursor.close()
+        conn.close()
+        flash("Document not found.", "danger")
+        return redirect(url_for('index'))
+
+    if user_id == doc['locked_by'] or user_id == doc['owner_id'] or user_role == 'admin':
+        cursor.execute(
+            "UPDATE documents SET is_locked = 0, locked_by = NULL WHERE id = %s",
+            (doc_id,)
+        )
+
+        # Determine the log detail
+        detail_msg = f"Unlocked file: {doc['filename']}"
+        if user_role == 'admin' and user_id != doc['locked_by']:
+            detail_msg += " (Admin Override)"
+
+        # Log the unlock action with the refined message
+        cursor.execute(
+            "INSERT INTO activity_logs (username, action, details) VALUES (%s, %s, %s)",
+            (session['username'], 'UNLOCK', detail_msg)
+        )
+
+        conn.commit()
+        flash(f"File '{doc['filename']}' unlocked successfully.", "success")
+    else:
+        flash("Unauthorized: Only the locker, owner, or an admin can unlock this file.", "danger")
+
+    cursor.close()
+    conn.close()
+    return redirect(url_for('index'))
 
 
 # =========================

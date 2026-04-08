@@ -147,6 +147,16 @@
             color: #c3cf79; /* light yellow */
             font-weight: bold;
         }
+
+        .log-file-lock {
+            color: #ba2dcd; /* Pink */
+            font-weight: bold;
+        }
+
+        .log-file-unlock {
+            color: #1d3a96; /* blue */
+            font-weight: bold;
+        }
     </style>
 </head>
 
@@ -252,6 +262,12 @@
                             
                             {% elif log.action == 'CREATE_GROUP' %}
                                 <span class="log-create-group">CREATE GROUP</span>
+
+                            {% elif log.action == 'LOCK' %}
+                                <span class="log-file-lock">FILE LOCK</span>
+                            
+                            {% elif log.action == 'UNLOCK' %}
+                                <span class="log-file-unlock">FILE UNLOCK</span>
 
                             {% else %}
                                 {{ log.action }}
