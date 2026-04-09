@@ -17,14 +17,18 @@ CREATE TABLE IF NOT EXISTS users (
     username VARCHAR(50) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
     role ENUM('admin', 'editor') NOT NULL DEFAULT 'editor',
+    must_change_password TINYINT(1) DEFAULT 1,
+    password_updated_at DATETIME DEFAULT '2000-01-01',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Initial admin user
-INSERT INTO users (username, password, role) VALUES (
+INSERT INTO users (username, password, role, must_change_password, password_updated_at) VALUES (
     'admin',
     'scrypt:32768:8:1$RPwf3n4vd0kOFUR4$42fa4d1abe85b25994b9362fc282f5ff079e68f56b3815c2414411307600cefbc3efe033b61e286f2b5793f1472c7b0c3b869ad8b4972354ffabc3042183bbaa',
-    'admin'
+    'admin',
+    0,
+    CURRENT_TIMESTAMP
 );
 
 -- =========================

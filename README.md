@@ -29,6 +29,7 @@ A Dockerized document management system built with:
 - UI alignment and column polishing
 - Added the last user modified the file
 - Hold Document Locking Feature (Check-in/Check-out Capability)
+- User level password reset
 
 ---
 
@@ -58,7 +59,6 @@ raketowl/
 
 ## 🛠️ Future Improvements
 
-- User level password reset
 - Hierarchical Structure
 - Attribute assignment (adding metadata to the file uploaded)
 

@@ -211,385 +211,441 @@
 
 <body>
 
-<div class="container-fluid px-4">
+	<input type="hidden" id="mustResetFlag" value="{{ session.get('must_change_password', 0) }}">
 
-    <!-- HEADER -->
-    <h1 class="main-title">Raket Owl Filing Cabinet</h1>
-    	{% if error == 'invalid' %}
-			<div class="alert alert-danger text-center mt-3">
-				Invalid username or password
-			</div>
-    	{% endif %}
+	<div class="container-fluid px-4">
 
-	{% with messages = get_flashed_messages(with_categories=true) %}
-    	    {% if messages %}
-        		{% for category, message in messages %}
-            	    <div class="alert alert-{{ category }} text-center mt-2">
-                	{{ message }}
-            	    </div>
-       			{% endfor %}
-    	    {% endif %}
-	{% endwith %}
-
-    <!-- TOP CONTROLS -->
-	<div class="d-flex justify-content-center align-items-center mt-3 flex-wrap">
-
-    	    <!-- Login Button -->
-    	    {% if not session.get('user_id') %}
-				<button class="btn btn-primary btn-custom" data-bs-toggle="modal" data-bs-target="#loginModal">
-						Login
-				</button>
-    	    {% else %}
-        	<span class="welcome-user">Welcome, {{ session['username'] }}</span>
-        	<a href="/logout" class="btn btn-danger btn-custom">Logout</a>
-    	    {% endif %}
-
-    	    <!-- Theme Toggle -->
-    	    <button class="btn btn-secondary btn-custom" onclick="toggleTheme()">
-        	<span id="themeIcon">🌙</span>
-    	    </button>
-
-    	    <!-- Upload Form (NOW MOVED HERE) -->
-	    {% if session.get('user_id') %}
-	    
-	    <small class="text-warning ms-3">
-    		Uploading a file with the same name will update its version if you have edit access.
-	    </small>
-
-	    <form action="/upload" method="POST" enctype="multipart/form-data" class="d-flex align-items-center ms-3">
-
-    		<input type="file" name="document" class="form-control me-2" required style="max-width: 250px;">
-
-    		<button type="submit" class="btn btn-success">Upload</button>
-
-	    </form>
-
-	    {% endif %}
-	    
-	    <!-- User Management & Activity Logs Button -->
-	    {% if session.get('role') == 'admin' %}
-    		<a href="/admin/users" class="btn btn-warning btn-custom ms-3">
-        	    User Management
-    		</a>
-
-    		<a href="/admin/logs" class="btn btn-info btn-custom">
-        	    Activity Logs
-    		</a>
-	    {% endif %}
-	</div>	
-
-    <!-- SEARCH BAR -->
-    <div class="mt-4">
-    	<form method="GET" action="/" class="mt-4">
-    	    <input 
-        	type="text" 
-        	name="search"
-        	class="form-control" 
-        	placeholder="Search documents..."
-        	value="{{ request.args.get('search', '') }}"
-    	    >
-	</form>
-    </div>
-
-    <!-- PUBLIC DOCUMENTS TABLE -->
-    <div class="mt-4 w-100">
-        <table class="table table-dark-custom table-hover w-100">
-            <thead>
-                <tr>
-                    <th>File Name</th>
-					<th>Owner</th>
-					<th class="text-center">Version</th>
-					<th>Last Modified By</th>
-					<th class="text-center">Date</th>
-					<th>Status</th>
-					{% if session.get('user_id') %}
-						<th class="text-center">User Share</th>
-						<th class="text-center">Group Share</th>
-					{% endif %}
-					<th class="text-center">Action</th>
-                </tr>
-            </thead>
-	    <tbody>
-    		{% if documents %}
-        	    {% for doc in documents %}
-        	    <tr>
-            		<td>{{ doc.filename }}</td>
-					<td>{{ doc.username }}</td>
-					<td class="text-center">{{ doc.version }}</td>
-					<td>{{ doc.last_editor if doc.last_editor else 'Original' }}</td>
-					<td class="text-center">{{ doc.updated_at }}</td>
-
-					<td class="text-center align-middle">
-						<div class="d-flex flex-column gap-1">
-							{% if doc.is_locked %}
-								<span class="badge bg-danger">🔒 Locked</span>
-								
-								{# Step 2: Display the name we just added to the SQL #}
-								{% if doc.locker_name %}
-									<small class="locker-info">
-										by {{ doc.locker_name }}
-									</small>
-								{% endif %}
-
-							{% elif doc.is_public %}
-								<span class="badge bg-warning text-dark">Public</span>
-							{% else %}
-								<span class="badge bg-success">Private</span>
-							{% endif %}
-						</div>
-					</td>
-
-			{% if session.get('user_id') %}
-			<td>
-
-    			<div class="d-flex flex-column gap-1">
-
-					<!-- EXISTING USER SHARES -->
-					{% if shared_map.get(doc.id) %}
-						{% for s in shared_map.get(doc.id) %}
-							<div class="d-flex justify-content-between align-items-center">
-
-								<span class="badge bg-info text-dark">
-									{{ s.display }}
-								</span>
-
-								{% if session.get('user_id') == doc.owner_id %}
-								<form action="/unshare/{{ doc.id }}" method="POST" class="m-0">
-									<input type="hidden" name="user_id" value="{{ s.user_id }}">
-									<button type="submit"
-											class="btn btn-sm btn-danger px-2 py-0"
-											onclick="return confirm('Remove access for this user?');">
-										✖
-									</button>
-								</form>
-								{% endif %}
-
-							</div>
-						{% endfor %}
-					{% else %}
-						<span class="text-muted">-</span>
-					{% endif %}
-
-					<!-- SHARE FORM -->
-					{% if session.get('user_id') == doc.owner_id %}
-					<form action="/share/{{ doc.id }}" method="POST" class="d-flex gap-1 mt-1">
-
-						<select name="user_id" class="form-select form-select-sm" required>
-							<option value="" disabled selected>User</option>
-							{% for u in all_users %}
-								{% if u.id != session.get('user_id') %}
-									<option value="{{ u.id }}">{{ u.username }}</option>
-								{% endif %}
-							{% endfor %}
-						</select>
-
-						<select name="permission" class="form-select form-select-sm">
-							<option value="view">View</option>
-							<option value="edit">Edit</option>
-						</select>
-
-						<button type="submit" class="btn btn-sm btn-info">
-							Share
-						</button>
-
-					</form>
-					{% endif %}
-
+		<!-- HEADER -->
+		<h1 class="main-title">Raket Owl Filing Cabinet</h1>
+			{% if error == 'invalid' %}
+				<div class="alert alert-danger text-center mt-3">
+					Invalid username or password
 				</div>
-
-			</td>
-
-			<td>
-
-				<div class="d-flex flex-column gap-1">
-
-					<!-- EXISTING GROUP SHARES -->
-					{% if group_shared_map.get(doc.id) %}
-						{% for g in group_shared_map.get(doc.id) %}
-							<div class="d-flex justify-content-between align-items-center">
-
-								<span class="badge bg-info text-dark">
-									{{ g.display }}
-								</span>
-
-								{% if session.get('user_id') == doc.owner_id %}
-								<form action="/unshare_group/{{ doc.id }}" method="POST" class="m-0">
-									<input type="hidden" name="group_id" value="{{ g.group_id }}">
-									<button type="submit"
-											class="btn btn-sm btn-danger px-2 py-0"
-											onclick="return confirm('Remove access for this group?');">
-										✖
-									</button>
-								</form>
-								{% endif %}
-
-							</div>
-						{% endfor %}
-					{% else %}
-						<span class="text-muted">-</span>
-					{% endif %}
-
-					<!-- SHARE FORM -->
-					{% if session.get('user_id') == doc.owner_id %}
-					<form action="/share_group/{{ doc.id }}" method="POST" class="d-flex gap-1 mt-1">
-
-						<select name="group_id" class="form-select form-select-sm" required>
-							<option value="" disabled selected>Group</option>
-							{% for g in all_groups %}
-								<option value="{{ g.id }}">{{ g.name }}</option>
-							{% endfor %}
-						</select>
-
-						<select name="permission" class="form-select form-select-sm">
-							<option value="view">View</option>
-							<option value="edit">Edit</option>
-						</select>
-
-						<button type="submit" class="btn btn-sm btn-info">
-							Share
-						</button>
-
-					</form>
-					{% endif %}
-
-				</div>
-
-			</td>
 			{% endif %}
 
-			<!-- ACTION COLUMN -->
-			<td class="text-nowrap align-middle">
+		{% with messages = get_flashed_messages(with_categories=true) %}
+				{% if messages %}
+					{% for category, message in messages %}
+						<div class="alert alert-{{ category }} text-center mt-2">
+						{{ message }}
+						</div>
+					{% endfor %}
+				{% endif %}
+		{% endwith %}
 
-				<!-- DOWNLOAD -->
-				<div class="d-flex gap-1 justify-content-center">
-					<a href="/download/{{ doc.id }}" class="btn btn-sm btn-primary">Download</a>
+		<!-- TOP CONTROLS -->
+		<div class="d-flex justify-content-center align-items-center mt-3 flex-wrap">
 
-					{# ONLY show Lock/Unlock if the user is logged in #}
-        			{% if session.get('user_id') %}
+				<!-- Login Button -->
+				{% if not session.get('user_id') %}
+					<button class="btn btn-primary btn-custom" data-bs-toggle="modal" data-bs-target="#loginModal">
+							Login
+					</button>
+				{% else %}
+					<span class="welcome-user">Welcome, {{ session['username'] }}</span>
 
-						<!-- FILE LOCK UNLOCK -->
-						{% if doc.is_locked %}
-							{# UNLOCK: Only show to locker, owner, or admin #}
-							{% if session.get('user_id') == doc.locked_by or session.get('user_id') == doc.owner_id or session.get('role') == 'admin' %}
-								<form action="/unlock/{{ doc.id }}" method="POST" class="m-0">
-									<button type="submit" class="btn btn-sm btn-warning">Unlock</button>
-								</form>
-							{% else %}
-								{# Other users just see the status in the other column, no button here #}
-							{% endif %}
+					{% if session.get('role') != 'admin' %}
+						<button class="btn btn-outline-info btn-custom" data-bs-toggle="modal" data-bs-target="#resetPasswordModal">
+							Change Password
+						</button>
+					{% endif %}
+
+					<a href="/logout" class="btn btn-danger btn-custom">Logout</a>
+				{% endif %}
+
+				<!-- Theme Toggle -->
+				<button class="btn btn-secondary btn-custom" onclick="toggleTheme()">
+				<span id="themeIcon">🌙</span>
+				</button>
+
+				<!-- Upload Form (NOW MOVED HERE) -->
+			{% if session.get('user_id') %}
+			
+			<small class="text-warning ms-3">
+				Uploading a file with the same name will update its version if you have edit access.
+			</small>
+
+			<form action="/upload" method="POST" enctype="multipart/form-data" class="d-flex align-items-center ms-3">
+
+				<input type="file" name="document" class="form-control me-2" required style="max-width: 250px;">
+
+				<button type="submit" class="btn btn-success">Upload</button>
+
+			</form>
+
+			{% endif %}
+			
+			<!-- User Management & Activity Logs Button -->
+			{% if session.get('role') == 'admin' %}
+				<a href="/admin/users" class="btn btn-warning btn-custom ms-3">
+					User Management
+				</a>
+
+				<a href="/admin/logs" class="btn btn-info btn-custom">
+					Activity Logs
+				</a>
+			{% endif %}
+		</div>	
+
+		<!-- SEARCH BAR -->
+		<div class="mt-4">
+			<form method="GET" action="/" class="mt-4">
+				<input 
+				type="text" 
+				name="search"
+				class="form-control" 
+				placeholder="Search documents..."
+				value="{{ request.args.get('search', '') }}"
+				>
+		</form>
+		</div>
+
+		<!-- PUBLIC DOCUMENTS TABLE -->
+		<div class="mt-4 w-100">
+			<table class="table table-dark-custom table-hover w-100">
+				<thead>
+					<tr>
+						<th>File Name</th>
+						<th>Owner</th>
+						<th class="text-center">Version</th>
+						<th>Last Modified By</th>
+						<th class="text-center">Date</th>
+						<th>Status</th>
+						{% if session.get('user_id') %}
+							<th class="text-center">User Share</th>
+							<th class="text-center">Group Share</th>
+						{% endif %}
+						<th class="text-center">Action</th>
+					</tr>
+				</thead>
+			<tbody>
+				{% if documents %}
+					{% for doc in documents %}
+					<tr>
+						<td>{{ doc.filename }}</td>
+						<td>{{ doc.username }}</td>
+						<td class="text-center">{{ doc.version }}</td>
+						<td>{{ doc.last_editor if doc.last_editor else 'Original' }}</td>
+						<td class="text-center">{{ doc.updated_at }}</td>
+
+						<td class="text-center align-middle">
+							<div class="d-flex flex-column gap-1">
+								{% if doc.is_locked %}
+									<span class="badge bg-danger">🔒 Locked</span>
+									
+									{# Step 2: Display the name we just added to the SQL #}
+									{% if doc.locker_name %}
+										<small class="locker-info">
+											by {{ doc.locker_name }}
+										</small>
+									{% endif %}
+
+								{% elif doc.is_public %}
+									<span class="badge bg-warning text-dark">Public</span>
+								{% else %}
+									<span class="badge bg-success">Private</span>
+								{% endif %}
+							</div>
+						</td>
+
+				{% if session.get('user_id') %}
+				<td>
+
+					<div class="d-flex flex-column gap-1">
+
+						<!-- EXISTING USER SHARES -->
+						{% if shared_map.get(doc.id) %}
+							{% for s in shared_map.get(doc.id) %}
+								<div class="d-flex justify-content-between align-items-center">
+
+									<span class="badge bg-info text-dark">
+										{{ s.display }}
+									</span>
+
+									{% if session.get('user_id') == doc.owner_id %}
+									<form action="/unshare/{{ doc.id }}" method="POST" class="m-0">
+										<input type="hidden" name="user_id" value="{{ s.user_id }}">
+										<button type="submit"
+												class="btn btn-sm btn-danger px-2 py-0"
+												onclick="return confirm('Remove access for this user?');">
+											✖
+										</button>
+									</form>
+									{% endif %}
+
+								</div>
+							{% endfor %}
 						{% else %}
-							{# If NOT locked, anyone with access can Lock #}
-							<form action="/lock/{{ doc.id }}" method="POST" class="m-0">
-								<button type="submit" class="btn btn-sm btn-outline-secondary">Lock</button>
-							</form>
+							<span class="text-muted">-</span>
+						{% endif %}
+
+						<!-- SHARE FORM -->
+						{% if session.get('user_id') == doc.owner_id %}
+						<form action="/share/{{ doc.id }}" method="POST" class="d-flex gap-1 mt-1">
+
+							<select name="user_id" class="form-select form-select-sm" required>
+								<option value="" disabled selected>User</option>
+								{% for u in all_users %}
+									{% if u.id != session.get('user_id') %}
+										<option value="{{ u.id }}">{{ u.username }}</option>
+									{% endif %}
+								{% endfor %}
+							</select>
+
+							<select name="permission" class="form-select form-select-sm">
+								<option value="view">View</option>
+								<option value="edit">Edit</option>
+							</select>
+
+							<button type="submit" class="btn btn-sm btn-info">
+								Share
+							</button>
+
+						</form>
+						{% endif %}
+
+					</div>
+
+				</td>
+
+				<td>
+
+					<div class="d-flex flex-column gap-1">
+
+						<!-- EXISTING GROUP SHARES -->
+						{% if group_shared_map.get(doc.id) %}
+							{% for g in group_shared_map.get(doc.id) %}
+								<div class="d-flex justify-content-between align-items-center">
+
+									<span class="badge bg-info text-dark">
+										{{ g.display }}
+									</span>
+
+									{% if session.get('user_id') == doc.owner_id %}
+									<form action="/unshare_group/{{ doc.id }}" method="POST" class="m-0">
+										<input type="hidden" name="group_id" value="{{ g.group_id }}">
+										<button type="submit"
+												class="btn btn-sm btn-danger px-2 py-0"
+												onclick="return confirm('Remove access for this group?');">
+											✖
+										</button>
+									</form>
+									{% endif %}
+
+								</div>
+							{% endfor %}
+						{% else %}
+							<span class="text-muted">-</span>
+						{% endif %}
+
+						<!-- SHARE FORM -->
+						{% if session.get('user_id') == doc.owner_id %}
+						<form action="/share_group/{{ doc.id }}" method="POST" class="d-flex gap-1 mt-1">
+
+							<select name="group_id" class="form-select form-select-sm" required>
+								<option value="" disabled selected>Group</option>
+								{% for g in all_groups %}
+									<option value="{{ g.id }}">{{ g.name }}</option>
+								{% endfor %}
+							</select>
+
+							<select name="permission" class="form-select form-select-sm">
+								<option value="view">View</option>
+								<option value="edit">Edit</option>
+							</select>
+
+							<button type="submit" class="btn btn-sm btn-info">
+								Share
+							</button>
+
+						</form>
+						{% endif %}
+
+					</div>
+
+				</td>
+				{% endif %}
+
+				<!-- ACTION COLUMN -->
+				<td class="text-nowrap align-middle">
+					<div class="d-flex gap-1 justify-content-center">
+						
+						{# 1. LOCK / UNLOCK (Gatekeeper First) #}
+						{% if session.get('user_id') %}
+
+							<!-- FILE LOCK UNLOCK -->
+							{% if doc.is_locked %}
+								{# UNLOCK: Only show to locker, owner, or admin #}
+								{% if session.get('user_id') == doc.locked_by or session.get('user_id') == doc.owner_id or session.get('role') == 'admin' %}
+									<form action="/unlock/{{ doc.id }}" method="POST" class="m-0">
+										<button type="submit" class="btn btn-sm btn-warning">Unlock</button>
+									</form>
+								{% endif %}
+							{% else %}
+								{# If NOT locked, show Lock button #}
+								<form action="/lock/{{ doc.id }}" method="POST" class="m-0">
+									<button type="submit" class="btn btn-sm btn-outline-secondary">Lock</button>
+								</form>
+							{% endif %}
 						{% endif %}
 						
+						<!-- DOWNLOAD -->
+						{# 2. DOWNLOAD #}
+						<a href="/download/{{ doc.id }}" class="btn btn-sm btn-primary">Download</a>
+						
 						<!-- TOGGLE PUBLIC / PRIVATE -->
-						{# OWNER CONTROLS: Hidden if file is locked #}
-						{% if session.get('user_id') == doc.owner_id and not doc.is_locked %}
-							<form action="/toggle_visibility/{{ doc.id }}" method="POST" class="m-0">
-								{% if doc.is_public %}
-									{# If currently public, show button to make it Private (Warning/Orange) #}
-									<button type="submit" class="btn btn-sm btn-warning text-nowrap">
-										Make Private
-									</button>
-								{% else %}
-									{# If currently private, show button to make it Public (Success/Green) #}
-									<button type="submit" class="btn btn-sm btn-success text-nowrap">
-										Make Public
-									</button>
-								{% endif %}
-							</form>
+						{# 3. OWNER-ONLY CONTROLS (Public/Private & Delete) #}
+						{% if session.get('user_id') == doc.owner_id %}
+							{# These are wrapped: only visible if NOT locked #}
+							{% if not doc.is_locked %}
+								
+								<form action="/toggle_visibility/{{ doc.id }}" method="POST" class="m-0">
+									{% if doc.is_public %}
+										<button type="submit" class="btn btn-sm btn-warning text-nowrap">Make Private</button>
+									{% else %}
+										<button type="submit" class="btn btn-sm btn-success text-nowrap">Make Public</button>
+									{% endif %}
+								</form>
 
-							<!-- DELETE -->
-							<form action="/delete/{{ doc.id }}" method="POST" class="m-0">
-								<button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure?');">
-									Delete
-								</button>
-							</form>
+								<!-- DELETE -->
+								<form action="/delete/{{ doc.id }}" method="POST" class="m-0">
+									<button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure?');">
+										Delete
+									</button>
+								</form>
+
+							{% endif %}
 						{% endif %}
-					
-					{% endif %}
-				</div>
-			</td>
-        	    </tr>
-        	    {% endfor %}
-    		{% else %}
-        	    <tr>
-            		<td colspan="{{ 9 if session.get('user_id') else 7 }}" class="center">
-						No documents available
-					</td>
-        	    </tr>
-    		{% endif %}
-	    </tbody>
-        </table>
-    </div>
 
-</div>
+					</div>
+				</td>
+					</tr>
+					{% endfor %}
+				{% else %}
+					<tr>
+						<td colspan="{{ 9 if session.get('user_id') else 7 }}" class="center">
+							No documents available
+						</td>
+					</tr>
+				{% endif %}
+			</tbody>
+			</table>
+		</div>
 
-<!-- LOGIN MODAL -->
-<div class="modal fade" id="loginModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
+	</div>
 
-            <form method="POST" action="/login">
-                <div class="modal-header">
-                    <h5 class="modal-title">Login</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
+	<!-- LOGIN MODAL -->
+	<div class="modal fade" id="loginModal" tabindex="-1">
+		<div class="modal-dialog">
+			<div class="modal-content">
 
-                <div class="modal-body">
-                    <input type="text" name="username" class="form-control mb-2" placeholder="Username" required>
-                    <input type="password" name="password" class="form-control" placeholder="Password" required>
-                </div>
+				<form method="POST" action="/login">
+					<div class="modal-header">
+						<h5 class="modal-title">Login</h5>
+						<button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+					</div>
 
-                <div class="modal-footer">
-                    <button type="submit" class="btn btn-primary">Login</button>
-                </div>
-            </form>
+					<div class="modal-body">
+						<input type="text" name="username" class="form-control mb-2" placeholder="Username" required>
+						<input type="password" name="password" class="form-control" placeholder="Password" required>
+					</div>
 
-        </div>
-    </div>
-</div>
+					<div class="modal-footer">
+						<button type="submit" class="btn btn-primary">Login</button>
+					</div>
+				</form>
 
-<!-- Bootstrap JS -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+			</div>
+		</div>
+	</div>
 
-<!-- Theme Script -->
-<script>
-    function toggleTheme() {
-    	let body = document.body;
-    	let icon = document.getElementById("themeIcon");
+	<!-- PASSWORD RESET MODAL -->
+	<div class="modal fade" id="resetPasswordModal" tabindex="-1">
+		<div class="modal-dialog">
+			<div class="modal-content">
 
-    	if (body.classList.contains("dark-mode")) {
-            body.classList.remove("dark-mode");
-            body.classList.add("light-mode");
-            localStorage.setItem("theme", "light");
-            icon.textContent = "☀️";
-    	} else {
-            body.classList.remove("light-mode");
-            body.classList.add("dark-mode");
-            localStorage.setItem("theme", "dark");
-            icon.textContent = "🌙";
-    	}	
-    }
+				<form method="POST" action="/update_password">
+					<div class="modal-header">
+						<h5 class="modal-title">Reset Required</h5>
+					</div>
 
-    // Load saved theme
-    	window.onload = function () {
-            let theme = localStorage.getItem("theme");
-            let icon = document.getElementById("themeIcon");
+					<div class="modal-body">
+						<p class="text-info small mb-3">Your account requires a password update before you can proceed.</p>
+						
+						<div class="mb-3">
+							<label class="form-label small">Current Password</label>
+							<input type="password" name="current_password" class="form-control" placeholder="Current Password" required>
+						</div>
 
-    	document.body.classList.remove("dark-mode", "light-mode");
+						<div class="mb-3">
+							<label class="form-label small">New Password</label>
+							<input type="password" name="new_password" class="form-control" placeholder="New Password" required>
+						</div>
 
-    	if (theme === "light") {
-            document.body.classList.add("light-mode");
-            if (icon) icon.textContent = "☀️";
-    	} else {
-            document.body.classList.add("dark-mode");
-            if (icon) icon.textContent = "🌙";
-    	}
-    };
-</script>
+						<div class="mb-3">
+							<label class="form-label small">Confirm New Password</label>
+							<input type="password" name="confirm_password" class="form-control" placeholder="Confirm New Password" required>
+						</div>
+					</div>
+
+					<div class="modal-footer">
+						<button type="submit" class="btn btn-primary w-100">Update & Access Filing Cabinet</button>
+					</div>
+				</form>
+
+			</div>
+		</div>
+	</div>
+
+	<!-- Bootstrap JS -->
+	<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+	<!-- Theme Script -->
+	<script>
+		function toggleTheme() {
+			let body = document.body;
+			let icon = document.getElementById("themeIcon");
+
+			if (body.classList.contains("dark-mode")) {
+				body.classList.remove("dark-mode");
+				body.classList.add("light-mode");
+				localStorage.setItem("theme", "light");
+				icon.textContent = "☀️";
+			} else {
+				body.classList.remove("light-mode");
+				body.classList.add("dark-mode");
+				localStorage.setItem("theme", "dark");
+				icon.textContent = "🌙";
+			}	
+		}
+
+		// Load saved theme
+		window.onload = function () {
+			let theme = localStorage.getItem("theme");
+			let icon = document.getElementById("themeIcon");
+
+			document.body.classList.remove("dark-mode", "light-mode");
+
+			if (theme === "light") {
+				document.body.classList.add("light-mode");
+				if (icon) icon.textContent = "☀️";
+			} else {
+				document.body.classList.add("dark-mode");
+				if (icon) icon.textContent = "🌙";
+			}
+
+			// --- NEW CLEAN LOGIC START ---
+			let resetFlagInput = document.getElementById('mustResetFlag');
+			if (resetFlagInput && resetFlagInput.value == "1") {
+				let resetModalElement = document.getElementById('resetPasswordModal');
+				if (resetModalElement) {
+					let resetModal = new bootstrap.Modal(resetModalElement);
+					resetModal.show();
+				}
+			}
+			// --- NEW CLEAN LOGIC END ---
+		};
+	</script>
 
 </body>
 </html>

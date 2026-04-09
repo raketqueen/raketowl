@@ -3,7 +3,8 @@ import time
 import os
 from flask import Flask, render_template, request, redirect, session, url_for, send_file, flash
 import mysql.connector
-from werkzeug.security import check_password_hash
+from mysql.connector import Error
+from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
 app.secret_key = 'K0rgG3#5952'  # change in production
@@ -339,35 +340,27 @@ def unshare_group(doc_id):
 
 @app.route('/login', methods=['POST'])
 def login():
-    username = request.form['username']
-    password = request.form['password']
+    username = request.form.get('username')
+    password = request.form.get('password')
 
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
-
     cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
     user = cursor.fetchone()
+    cursor.close()
+    conn.close()
 
     if user and check_password_hash(user['password'], password):
         session['user_id'] = user['id']
         session['username'] = user['username']
         session['role'] = user['role']
 
-        # Log activity
-        cursor.execute(
-            "INSERT INTO activity_logs (username, action, details) VALUES (%s, %s, %s)",
-            (username, 'LOGIN', 'User logged in')
-        )
-        conn.commit()
-
-        cursor.close()
-        conn.close()
+        # --- ADD THIS LINE HERE ---
+        session['must_change_password'] = user['must_change_password']
+        # --------------------------
 
         return redirect(url_for('index'))
     else:
-        cursor.close()
-        conn.close()
-
         return redirect(url_for('index', error='invalid'))
 
 # =========================
@@ -1034,6 +1027,10 @@ def create_group():
 
 @app.route('/admin/create_user', methods=['POST'])
 def create_user():
+    """
+    Creates a new user, assigns them to groups, and sets 
+     the mandatory password reset flag to 1.
+    """
 
     # Admin only
     if 'user_id' not in session or session.get('role') != 'admin':
@@ -1047,14 +1044,10 @@ def create_user():
     if not username or not password:
         return redirect(url_for('admin_users'))
 
-    from werkzeug.security import generate_password_hash
     hashed_password = generate_password_hash(password)
 
     conn = get_db_connection()
     cursor = conn.cursor()
-
-    # Insert user
-    from mysql.connector import Error
 
     try:
         cursor.execute(
@@ -1104,6 +1097,10 @@ def create_user():
 
 @app.route('/admin/edit_user/<int:user_id>', methods=['GET', 'POST'])
 def edit_user(user_id):
+    """
+    Handles fetching user data for the edit form (GET) 
+    and updating user credentials/groups (POST).
+    """
     # Admin only
     if 'user_id' not in session or session.get('role') != 'admin':
         return "Unauthorized", 403
@@ -1126,11 +1123,9 @@ def edit_user(user_id):
 
         # 🔐 RESET PASSWORD (ONLY IF PROVIDED)
         if new_password:
-            from werkzeug.security import generate_password_hash
             hashed_password = generate_password_hash(new_password)
-
             cursor.execute(
-                "UPDATE users SET password = %s WHERE id = %s",
+                "UPDATE users SET password = %s, must_change_password = 1 WHERE id = %s",
                 (hashed_password, user_id)
             )
 
@@ -1485,6 +1480,78 @@ def unlock_document(doc_id):
 
     cursor.close()
     conn.close()
+    return redirect(url_for('index'))
+
+# =========================
+# UPDATE PASSWORD
+# =========================
+
+
+@app.route('/update_password', methods=['POST'])
+def update_password():
+    """
+    Processes the mandatory password reset with verification.
+    Requires Current Password, New Password, and Confirmation.
+    """
+    if 'user_id' not in session:
+        return redirect(url_for('index'))
+
+    # 1. Grab form data
+    current_password = request.form.get('current_password')
+    new_password = request.form.get('new_password')
+    confirm_password = request.form.get('confirm_password')
+    user_id = session['user_id']
+
+    # 2. Basic Validation: Ensure no fields are empty
+    if not current_password or not new_password or not confirm_password:
+        flash("All fields are required.", "warning")
+        return redirect(url_for('index'))
+
+    # 3. Validation: Ensure new passwords match
+    if new_password != confirm_password:
+        flash("New passwords do not match.", "danger")
+        return redirect(url_for('index'))
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        # 4. Verification: Check if current password is correct
+        cursor.execute(
+            "SELECT password, username FROM users WHERE id = %s", (user_id,))
+        user = cursor.fetchone()
+
+        if not user or not check_password_hash(user['password'], current_password):
+            flash("Current password incorrect.", "danger")
+            return redirect(url_for('index'))
+
+        # 5. Execution: Update password and flip the flag
+        hashed_password = generate_password_hash(new_password)
+        cursor.execute("""
+            UPDATE users 
+            SET password = %s, must_change_password = 0, password_updated_at = NOW() 
+            WHERE id = %s
+        """, (hashed_password, user_id))
+
+        # 6. Logging
+        cursor.execute(
+            "INSERT INTO activity_logs (username, action, details) VALUES (%s, %s, %s)",
+            (user['username'], 'SECURITY', 'Mandatory password reset completed')
+        )
+
+        conn.commit()
+
+        # Update session so the user isn't prompted again
+        session['must_change_password'] = 0
+        flash("Password updated successfully. Welcome back.", "success")
+
+    except Exception as e:  # pylint: disable=broad-except
+        conn.rollback()
+        flash(f"An error occurred: {str(e)}", "danger")
+    finally:
+        cursor.close()
+        conn.close()
+
     return redirect(url_for('index'))
 
 
