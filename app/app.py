@@ -347,20 +347,26 @@ def login():
     cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
     user = cursor.fetchone()
-    cursor.close()
-    conn.close()
 
     if user and check_password_hash(user['password'], password):
         session['user_id'] = user['id']
         session['username'] = user['username']
         session['role'] = user['role']
-
-        # --- ADD THIS LINE HERE ---
         session['must_change_password'] = user['must_change_password']
-        # --------------------------
 
+        # ✅ LOGGING BLOCK HERE
+        cursor.execute(
+            "INSERT INTO activity_logs (username, action, details) VALUES (%s, %s, %s)",
+            (username, 'LOGIN', 'User logged in')
+        )
+        conn.commit()
+
+        cursor.close()
+        conn.close()
         return redirect(url_for('index'))
     else:
+        cursor.close()
+        conn.close()
         return redirect(url_for('index', error='invalid'))
 
 # =========================
