@@ -7,6 +7,7 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ThunderKats1973
       MYSQL_DATABASE: raketowl
+      TZ: "Asia/Singapore"
     command: --default-time-zone=+08:00
     volumes:
       - /dockers/raketowl/mysql:/var/lib/mysql
@@ -22,6 +23,7 @@ services:
       - db
     environment:
       - FLASK_ENV=development
+      - TZ=Asia/Singapore
     volumes:
       - ./app:/app
       - /dockers/raketowl/documents:/documents

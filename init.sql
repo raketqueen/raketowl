@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
     password VARCHAR(255) NOT NULL,
     role ENUM('admin', 'editor') NOT NULL DEFAULT 'editor',
     must_change_password TINYINT(1) DEFAULT 1,
-    password_updated_at DATETIME DEFAULT '2000-01-01',
+    password_updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

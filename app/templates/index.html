@@ -245,10 +245,16 @@
 					<span class="welcome-user">Welcome, {{ session['username'] }}</span>
 
 					{% if session.get('role') != 'admin' %}
-						<button class="btn btn-outline-info btn-custom" data-bs-toggle="modal" data-bs-target="#resetPasswordModal">
-							Change Password
-						</button>
-					{% endif %}
+                        {% if on_cooldown %}
+                            <button class="btn btn-outline-secondary btn-custom" disabled>
+                                🔒 Cooldown: {{ remaining_hours }}h left
+                            </button>
+                        {% else %}
+                            <button class="btn btn-outline-info btn-custom" data-bs-toggle="modal" data-bs-target="#resetPasswordModal">
+                                Change Password
+                            </button>
+                        {% endif %}
+                    {% endif %}
 
 					<a href="/logout" class="btn btn-danger btn-custom">Logout</a>
 				{% endif %}
@@ -560,7 +566,7 @@
 	</div>
 
 	<!-- PASSWORD RESET MODAL -->
-	<div class="modal fade" id="resetPasswordModal" tabindex="-1">
+	<div class="modal fade" id="resetPasswordModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
 		<div class="modal-dialog">
 			<div class="modal-content">
 
@@ -639,7 +645,10 @@
 			if (resetFlagInput && resetFlagInput.value == "1") {
 				let resetModalElement = document.getElementById('resetPasswordModal');
 				if (resetModalElement) {
-					let resetModal = new bootstrap.Modal(resetModalElement);
+					let resetModal = new bootstrap.Modal(resetModalElement, {
+						backdrop: 'static',
+						keyboard: false
+					});
 					resetModal.show();
 				}
 			}

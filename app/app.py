@@ -5,6 +5,7 @@ from flask import Flask, render_template, request, redirect, session, url_for, s
 import mysql.connector
 from mysql.connector import Error
 from werkzeug.security import check_password_hash, generate_password_hash
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 app.secret_key = 'K0rgG3#5952'  # change in production
@@ -56,6 +57,11 @@ def index():
     error = request.args.get('error')
     search = request.args.get('search')
 
+    # --- INITIALIZE COOLDOWN VARIABLES AT TOP ---
+    on_cooldown = False
+    remaining_hours = 0
+    # --------------------------------------------
+
     try:
         conn = get_db_connection()
     except (mysql.connector.Error, RuntimeError) as err:
@@ -74,6 +80,26 @@ def index():
         all_users = cursor.fetchall()
         cursor.execute("SELECT id, name FROM groups_master")
         all_groups = cursor.fetchall()
+
+        # ==========================================
+        # NEW: CHECK PASSWORD RESET COOLDOWN STATUS
+        # ==========================================
+        cursor.execute(
+            "SELECT role, password_updated_at, must_change_password FROM users WHERE id = %s", (user_id,))
+        current_user = cursor.fetchone()
+
+        if current_user and current_user['role'] != 'admin' and current_user['password_updated_at']:
+            # Check cooldown ONLY if they are NOT currently forced to reset (must_change_password == 0)
+            if current_user['must_change_password'] == 0:
+                cooldown_limit = timedelta(hours=24)
+                time_diff = datetime.now() - \
+                    current_user['password_updated_at']
+
+                if time_diff < cooldown_limit:
+                    on_cooldown = True
+                    total_seconds_left = cooldown_limit.total_seconds() - time_diff.total_seconds()
+                    remaining_hours = int(total_seconds_left // 3600)
+        # ==========================================
 
         # FETCH DOCUMENTS (Logged In) - Added d.is_locked, d.locked_by
         query = """
@@ -182,7 +208,9 @@ def index():
         group_shared_map=group_shared_map,
         all_users=all_users,
         all_groups=all_groups,
-        search=search
+        search=search,
+        on_cooldown=on_cooldown,
+        remaining_hours=remaining_hours
     )
 
 # =========================
@@ -1496,8 +1524,8 @@ def unlock_document(doc_id):
 @app.route('/update_password', methods=['POST'])
 def update_password():
     """
-    Processes the mandatory password reset with verification.
-    Requires Current Password, New Password, and Confirmation.
+    Processes the password reset with a 24-hour cooldown for non-admins.
+    Bypasses cooldown if the reset is mandatory (must_change_password = 1).
     """
     if 'user_id' not in session:
         return redirect(url_for('index'))
@@ -1522,16 +1550,36 @@ def update_password():
     cursor = conn.cursor(dictionary=True)
 
     try:
-        # 4. Verification: Check if current password is correct
-        cursor.execute(
-            "SELECT password, username FROM users WHERE id = %s", (user_id,))
+        # 4. Verification: Fetch all necessary flags for security checks
+        cursor.execute("""
+            SELECT password, username, role, password_updated_at, must_change_password 
+            FROM users 
+            WHERE id = %s
+        """, (user_id,))
         user = cursor.fetchone()
 
+        # --- SECURITY COOLDOWN GATE ---
+        # Only enforce the wait if:
+        # - The user is NOT an admin
+        # - AND this is NOT a forced/initial reset (must_change_password is 0)
+        if user and user['role'] != 'admin' and user['must_change_password'] == 0:
+            if user['password_updated_at']:
+
+                cooldown_limit = timedelta(hours=24)
+                time_diff = datetime.now() - user['password_updated_at']
+
+                if time_diff < cooldown_limit:
+                    flash(
+                        "Security Cooldown: Standard users must wait 24 hours between voluntary changes.", "warning")
+                    return redirect(url_for('index'))
+        # -----------------------------
+
+        # Password Verification
         if not user or not check_password_hash(user['password'], current_password):
             flash("Current password incorrect.", "danger")
             return redirect(url_for('index'))
 
-        # 5. Execution: Update password and flip the flag
+        # 5. Execution: Update the password, reset the "must change" flag, and log the time
         hashed_password = generate_password_hash(new_password)
         cursor.execute("""
             UPDATE users 
@@ -1542,14 +1590,14 @@ def update_password():
         # 6. Logging
         cursor.execute(
             "INSERT INTO activity_logs (username, action, details) VALUES (%s, %s, %s)",
-            (user['username'], 'SECURITY', 'Mandatory password reset completed')
+            (user['username'], 'SECURITY', 'Password update completed')
         )
 
         conn.commit()
 
-        # Update session so the user isn't prompted again
+        # Update session so the user is clear to browse
         session['must_change_password'] = 0
-        flash("Password updated successfully. Welcome back.", "success")
+        flash("Password updated successfully.", "success")
 
     except Exception as e:  # pylint: disable=broad-except
         conn.rollback()
