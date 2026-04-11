@@ -449,10 +449,44 @@ def upload():
         return "No file selected", 400
 
     filename = file.filename
-    filepath = os.path.join(app.config['DOCUMENTS_PATH'], filename)
+    current_user_id = session['user_id']
 
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
+
+    # ==========================================================
+    # PRE-CHECK: RESOLVE HIDDEN NAME COLLISIONS
+    # ==========================================================
+    cursor.execute(
+        "SELECT id, owner_id FROM documents WHERE filename = %s", (filename,))
+    collision_check = cursor.fetchone()
+
+    if collision_check:
+        # Check if user has ANY access to this specific filename
+        cursor.execute("SELECT permission FROM document_shares WHERE document_id = %s AND shared_with_user_id = %s",
+                       (collision_check['id'], current_user_id))
+        u_p = cursor.fetchone()
+        cursor.execute("""
+            SELECT MAX(dgs.permission) AS permission FROM document_group_shares dgs
+            JOIN user_groups ug ON dgs.group_id = ug.group_id
+            WHERE dgs.document_id = %s AND ug.user_id = %s
+        """, (collision_check['id'], current_user_id))
+        g_p = cursor.fetchone()
+
+        # If they aren't the owner and have no shares, it's a "hidden" collision. Rename it.
+        if current_user_id != collision_check['owner_id'] and not u_p and not (g_p and g_p['permission']):
+            base, ext = os.path.splitext(filename)
+            counter = 1
+            while True:
+                new_filename = f"{base}_v{counter}{ext}"
+                cursor.execute(
+                    "SELECT id FROM documents WHERE filename = %s", (new_filename,))
+                if not cursor.fetchone():
+                    filename = new_filename
+                    break
+                counter += 1
+
+    filepath = os.path.join(app.config['DOCUMENTS_PATH'], filename)
 
     # =========================
     # STEP 1: CHECK IF DOCUMENT EXISTS & LOCK STATUS
