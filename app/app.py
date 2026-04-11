@@ -59,7 +59,7 @@ def index():
 
     # --- INITIALIZE COOLDOWN VARIABLES AT TOP ---
     on_cooldown = False
-    remaining_hours = 0
+    cooldown_text = ""
     # --------------------------------------------
 
     try:
@@ -82,14 +82,16 @@ def index():
         all_groups = cursor.fetchall()
 
         # ==========================================
-        # NEW: CHECK PASSWORD RESET COOLDOWN STATUS
+        # UPDATED: CHECK PASSWORD RESET COOLDOWN STATUS
         # ==========================================
         cursor.execute(
             "SELECT role, password_updated_at, must_change_password FROM users WHERE id = %s", (user_id,))
         current_user = cursor.fetchone()
 
+        # Initialize text at the level it's used
+        cooldown_text = ""
+
         if current_user and current_user['role'] != 'admin' and current_user['password_updated_at']:
-            # Check cooldown ONLY if they are NOT currently forced to reset (must_change_password == 0)
             if current_user['must_change_password'] == 0:
                 cooldown_limit = timedelta(hours=24)
                 time_diff = datetime.now() - \
@@ -97,8 +99,16 @@ def index():
 
                 if time_diff < cooldown_limit:
                     on_cooldown = True
-                    total_seconds_left = cooldown_limit.total_seconds() - time_diff.total_seconds()
-                    remaining_hours = int(total_seconds_left // 3600)
+                    # Calculate total seconds to determine H or M
+                    total_sec = int(
+                        (cooldown_limit - time_diff).total_seconds())
+
+                    if total_sec >= 3600:
+                        cooldown_text = f"{total_sec // 3600}h"
+                    elif total_sec >= 60:
+                        cooldown_text = f"{total_sec // 60}m"
+                    else:
+                        cooldown_text = "1m"
         # ==========================================
 
         # FETCH DOCUMENTS (Logged In) - Added d.is_locked, d.locked_by
@@ -210,7 +220,7 @@ def index():
         all_groups=all_groups,
         search=search,
         on_cooldown=on_cooldown,
-        remaining_hours=remaining_hours
+        cooldown_text=cooldown_text
     )
 
 # =========================
@@ -1569,8 +1579,17 @@ def update_password():
                 time_diff = datetime.now() - user['password_updated_at']
 
                 if time_diff < cooldown_limit:
+                    # Calculate exact time for the flash message
+                    total_sec = int(
+                        (cooldown_limit - time_diff).total_seconds())
+
+                    if total_sec >= 3600:
+                        t_msg = f"{total_sec // 3600}h"
+                    else:
+                        t_msg = f"{total_sec // 60}m"
+
                     flash(
-                        "Security Cooldown: Standard users must wait 24 hours between voluntary changes.", "warning")
+                        f"Next Password Change available in {t_msg}.", "warning")
                     return redirect(url_for('index'))
         # -----------------------------
 
@@ -1590,7 +1609,7 @@ def update_password():
         # 6. Logging
         cursor.execute(
             "INSERT INTO activity_logs (username, action, details) VALUES (%s, %s, %s)",
-            (user['username'], 'SECURITY', 'Password update completed')
+            (user['username'], 'SECURITY', 'Password change completed')
         )
 
         conn.commit()
