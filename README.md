@@ -107,7 +107,7 @@ docker compose down
 ![alt text](user-mgmt-page.gif)
 
  - User Editor
-![alt text](edit-user-page.gif)
+ ![alt text](edit-user-page.gif)
 
  - Activity Logs
 ![alt text](logs-page.gif)
