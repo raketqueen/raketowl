@@ -7,6 +7,8 @@ A Dockerized document management system built with:
 - Nginx (Reverse Proxy)
 - Bootstrap (Frontend UI)
 
+![Login](login-page.gif)
+
 ---
 
 ## 🚀 Features
