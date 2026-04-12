@@ -96,3 +96,6 @@ docker compose down
 
 # Author
 - Rommel Asis - Original Developer
+
+## Screenshot
+![Main Page](main-page.gif)
