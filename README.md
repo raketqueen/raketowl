@@ -100,14 +100,14 @@ docker compose down
 - Rommel Asis - Original Developer
 
 ## Screenshot
-Main
+ - Main
 ![alt text](main-page.gif)
 
-User Management
+ - User Management
 ![alt text](user-mgmt-page.gif)
 
-User Editor
+ - User Editor
 ![alt text](edit-user-page.gif)
 
-Activity Logs
+ - Activity Logs
 ![alt text](logs-page.gif)
