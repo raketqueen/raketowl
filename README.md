@@ -99,15 +99,12 @@ docker compose down
 # Author
 - Rommel Asis - Original Developer
 
-## Screenshot
- - Main
+## Screenshots
+
 ![alt text](main-page.gif)
 
- - User Management
 ![alt text](user-mgmt-page.gif)
 
- - User Editor
- ![alt text](edit-user-page.gif)
+![alt text](edit-user-page.gif)
 
- - Activity Logs
 ![alt text](logs-page.gif)
