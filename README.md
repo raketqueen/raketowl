@@ -7,7 +7,7 @@ A Dockerized document management system built with:
 - Nginx (Reverse Proxy)
 - Bootstrap (Frontend UI)
 
-
+![alt text](images/login-page.gif)
 ---
 
 ## 🚀 Features
@@ -99,3 +99,7 @@ docker compose down
 - Rommel Asis - Original Developer
 
 ## Screenshots
+![alt text](images/main-page.gif)
+![alt text](images/user-mgmt-page.gif)
+![alt text](images/edit-user-page.gif)
+![alt text](images/logs-page.gif)

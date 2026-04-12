@@ -18,3 +18,6 @@ documents/
 
 # Docker
 *.pid
+
+# VSCODE files
+.vscode/
