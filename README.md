@@ -56,6 +56,14 @@ raketowl/
 |-------images/                     # Screenshots
 |-------.gitignore
 ```
+## 📁 Persistent Storage
+ - This is the external directory will be created upon deployment
+```
+dockers/                            
+|------raketowl/
+|         |----mysql/               # Database
+|         |----documents/           # Actual files
+```
 
 ---
 
